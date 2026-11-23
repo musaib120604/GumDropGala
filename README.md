@@ -1,0 +1,59 @@
+# Gumdrop Gala (native Kotlin)
+
+A 100-level match-3 game written in plain Kotlin for Android. No Capacitor, no WebView, no Compose, no third-party libraries. Everything is drawn on a Canvas, and every sound is synthesised in code.
+
+## Get the APK from GitHub Actions
+
+1. Push this repo to GitHub (branch `main`).
+2. Open **Actions → Build Gumdrop Gala APK**. It runs on every push, or use **Run workflow**.
+3. Open the finished run and download the **gumdrop-gala-apk** artifact. Unzip it and install `GumdropGala-<version>-debug.apk` on your phone (allow installs from your file manager when asked).
+
+The debug APK is signed with Android's debug key. It installs and plays normally.
+
+### Signed release APK (optional)
+Add repository secrets `ANDROID_KEYSTORE_BASE64` (`base64 -w0 release.keystore`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, and the workflow also produces a signed `-release.apk`. Pushing a tag like `v1.2.0` attaches the APKs to a GitHub Release.
+
+## Layout
+
+```
+engine/   Pure Kotlin game rules (no Android imports). 40 JUnit tests incl. random-play simulation.
+app/      Android app: one custom View, Choreographer loop, all screens drawn in code.
+  Play.kt        Board, sprites, event "director" that animates each engine event in turn
+  GameView.kt    Home, level map, HUD, modals, touch routing
+  Ui.kt          Buttons, cards, icons, world backdrops (immediate-mode, units 360 wide)
+  CandyArt.kt    Glossy candy bitmaps drawn with Canvas, six distinct shapes
+  Fx.kt          Pooled tweens, timers, particles, beams
+  Audio.kt       AudioTrack mixer: synthesised SFX + procedural music, separate volumes
+  Haptics.kt     Vibrator / VibratorManager / VibrationEffect (predefined, composition, waveform)
+  Save.kt        SharedPreferences save: stars, coins, lives, boosters, daily streak, settings
+.github/workflows/build.yml
+```
+
+## Build locally
+JDK 17, Android SDK (platform 35), Gradle 8.10+:
+```sh
+gradle :engine:test          # tests + simulations
+gradle :app:assembleDebug    # app/build/outputs/apk/debug/app-debug.apk
+```
+
+## Engine
+`Game.swap()/hammer()/shuffleBooster()` return a lazy `Sequence<Event>`. The renderer pulls one event, animates it, then pulls the next, so logic and animation never overlap. Input is only accepted in `State.IDLE`. States: IDLE, SWAPPING, MATCHING, CLEARING, FALLING, REFILLING, CASCADING, GAME_OVER. Boards never start with a match and always have a move; deadlocks auto-shuffle.
+
+Matches: 3 clears; 4 makes a striped candy; L/T makes a wrapped candy; 5 makes a colour bomb. Combos: striped+striped (cross), wrapped+wrapped (5x5), striped+wrapped (3 rows + 3 columns), bomb+candy (clear colour), bomb+special (convert and fire), bomb+bomb (board).
+
+## Haptics
+| Interaction | Haptic |
+| --- | --- |
+| Select candy | TICK |
+| Swap | SOFT |
+| Invalid swap | REJECT (double buzz) |
+| Match 3 / 4 / 5+ | LIGHT / MEDIUM / STRONG |
+| Special activation | HEAVY |
+| Colour bomb / bomb combo | BOMB (composition, waveform fallback) |
+| Level complete | WIN pattern |
+| Button | TAP |
+
+Uses `VibrationEffect.createPredefined` on API 29+, the composition API on 30+, waveforms/one-shots otherwise, and does nothing if the device has no vibrator, the in-app toggle is off, or system touch feedback is disabled.
+
+## Accessibility
+Settings: reduce motion (also defaults on when the system animation scale is 0), colour-blind candy symbols, larger text, separate music/effects volumes, vibration toggle.
