@@ -35,27 +35,53 @@ val CANDY_COLORS = arrayOf(
  */
 class CandyArt {
     var assets: AssetManager? = null
-    private val cache = HashMap<Int, Bitmap>()
-    private var size = 0
-    private var symbols = false
+    private val cache = java.util.concurrent.ConcurrentHashMap<Int, Bitmap>()
+    @Volatile private var size = 0
+    @Volatile private var symbols = false
+    @Volatile private var gen = 0
 
     fun rebuild(px: Int, symbols: Boolean) {
         if (px == size && symbols == this.symbols && cache.isNotEmpty()) return
-        cache.values.forEach { if (!it.isRecycled) it.recycle() }
-        cache.clear()
-        size = px; this.symbols = symbols
+        cache.clear() // don't recycle: a frame may still be drawing these; GC reclaims them
+        size = px; this.symbols = symbols; gen++
+        prewarm()
+    }
+
+    /** Decodes every board sprite off the UI thread so the first special candy never causes a hitch. */
+    private fun prewarm() {
+        val g = gen; val px = size; val sym = symbols
+        Thread {
+            try {
+                for (type in 0 until 6) for (sp in 0 until 4) {
+                    if (g != gen) return@Thread
+                    val key = type * 8 + sp
+                    if (!cache.containsKey(key)) {
+                        val b = (if (sym) null else fromAsset(type, sp, px)) ?: render(type, sp, px, sym)
+                        if (g == gen) cache.putIfAbsent(key, b)
+                    }
+                }
+                if (g == gen && !cache.containsKey(999)) {
+                    val b = (if (sym) null else fromAsset(0, Special.BOMB, px)) ?: render(0, Special.BOMB, px, sym)
+                    if (g == gen) cache.putIfAbsent(999, b)
+                }
+            } catch (e: Throwable) { /* lazy path still works */ }
+        }.also { it.name = "candy-prewarm"; it.priority = Thread.MIN_PRIORITY }.start()
     }
 
     fun get(type: Int, special: Int): Bitmap {
         val key = if (special == Special.BOMB) 999 else type * 8 + special
-        return cache.getOrPut(key) { (if (symbols) null else fromAsset(type, special, size)) ?: render(type, special, size, symbols) }
+        val hit = cache[key]; if (hit != null) return hit
+        val b = (if (symbols) null else fromAsset(type, special, size)) ?: render(type, special, size, symbols)
+        return cache.putIfAbsent(key, b) ?: b
     }
 
     /** Standalone small render for HUD icons and avatars. */
-    private val small = HashMap<Int, Bitmap>()
+    private val small = java.util.concurrent.ConcurrentHashMap<Int, Bitmap>()
     fun icon(type: Int, special: Int, px: Int): Bitmap {
         val key = (if (special == Special.BOMB) 999 else type * 8 + special) * 1000 + px
-        return small.getOrPut(key) { fromAsset(type, special, px) ?: render(type, special, px, false) }
+        val hit = small[key]; if (hit != null) return hit
+        val b = fromAsset(type, special, px) ?: render(type, special, px, false)
+        return small.putIfAbsent(key, b) ?: b
     }
 
     /** Pre-rendered high-resolution sprite from assets/art, scaled down smoothly. Null if missing. */

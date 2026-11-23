@@ -76,6 +76,9 @@ data class Refill(val spawns: List<Spawn>) : Event()
 
 data class CascadeStep(val n: Int) : Event()
 
+/** Level won with moves to spare: these plain candies just turned into striped candies and are about to fire. */
+data class SugarCrush(val created: List<CreatedSpecial>, val movesLeft: Int) : Event()
+
 data class ShuffleMove(val id: Int, val fromR: Int, val fromC: Int, val r: Int, val c: Int, val type: Int)
 data class Shuffled(val moves: List<ShuffleMove>, val reason: String) : Event()
 

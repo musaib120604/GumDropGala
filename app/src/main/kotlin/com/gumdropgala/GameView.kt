@@ -27,6 +27,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
     private var selLevel = 1
     private var scale = 1f
     private var lastNs = 0L
+    private var lifeTickMs = 0f
     private var attached = false
     private val anim = Vals(8) // 0 modal pop, 1 fade, 2..4 win stars, 5 title bounce
     private var mapScroll = 0f
@@ -100,7 +101,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         val p = play
         if (screen == Screen.PLAY && p != null) p.update(dt) else { env.tw.update(dt); env.timers.update(dt); env.fx.update(dt) }
         if (toastMs > 0f) toastMs -= dt
-        env.save.tickLives()
+        lifeTickMs += dt; if (lifeTickMs >= 1000f) { lifeTickMs = 0f; env.save.tickLives() }
         invalidate()
         Choreographer.getInstance().postFrameCallback(this)
     }
@@ -114,6 +115,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             run { ui.safeTop = it.systemWindowInsetTop / scale; ui.safeBottom = it.systemWindowInsetBottom / scale }
         }
         env.art.rebuild(max(24, (42f * 0.98f * scale).toInt()), env.save.settings.symbols)
+        ui.preloadBackdrop(worldOf(env.save.unlocked))
     }
 
     /* -------------------------------------------------------------- input */
@@ -277,6 +279,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         resourceBar()
         // bouncing candy parade
         val cy = h * 0.2f + 44f
+        ui.circle(w / 2f, cy, 128f, 0x22FFFFFF); ui.circle(w / 2f, cy, 92f, 0x22FFFFFF)
         val sizePx = 56f
         for (i in 0 until 6) {
             val bmp = env.art.icon(i, Special.NONE, (sizePx * scale).toInt())
@@ -290,7 +293,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         ui.text("Gumdrop", w / 2f, ty, 52f, Pal.WHITE, Paint.Align.CENTER, 0xFFC73866.toInt(), 14f)
         ui.text("Gala", w / 2f, ty + 52f, 52f, Pal.LEMON, Paint.Align.CENTER, 0xFF9B6200.toInt(), 14f)
         val lvl = min(env.save.unlocked, LEVEL_COUNT)
-        ui.button(60f, h * 0.55f, w - 60f, h * 0.55f + 74f, "PLAY  ·  Level $lvl", Styles.PINK, { selLevel = lvl; openModal(Modal.INTRO) }, 24f)
+        ui.button(60f, h * 0.55f, w - 60f, h * 0.55f + 74f, "PLAY  ·  Level $lvl", Styles.ORANGE, { selLevel = lvl; openModal(Modal.INTRO) }, 26f)
         ui.button(60f, h * 0.55f + 92f, w - 60f, h * 0.55f + 146f, "Level Map", Styles.SKY, { go(Screen.MAP) }, 19f)
         val by = h - ui.safeBottom - 62f
         val daily = env.save.dailyState().canClaim
@@ -303,6 +306,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
 
     /* ----------------------------------------------------------------- map */
     private val NODE_DY = 78f
+    private val dotted = android.graphics.DashPathEffect(floatArrayOf(0.1f, 17f), 0f)
 
     private fun nodeX(n: Int): Float = ui.w / 2f + sin(n * 0.85f) * 96f
     private fun nodeY(n: Int): Float = ui.h - 150f - (n - 1) * NODE_DY + mapScroll
@@ -313,14 +317,14 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         ui.backdrop(worldOf(centerLevel))
         val unlocked = env.save.unlocked
         // path
-        ui.p.shader = null; ui.p.style = Paint.Style.STROKE; ui.p.strokeCap = Paint.Cap.ROUND; ui.p.strokeWidth = 14f; ui.p.color = 0x66FFFFFF
+        ui.p.shader = null; ui.p.style = Paint.Style.STROKE; ui.p.strokeCap = Paint.Cap.ROUND; ui.p.strokeWidth = 9f; ui.p.color = 0xE6FFFFFF.toInt(); ui.p.pathEffect = dotted
         ui.path.reset()
         var started = false
         for (n in 1..LEVEL_COUNT) {
             val y = nodeY(n); if (y < -80f || y > h + 80f) { started = false; continue }
             if (!started) { ui.path.moveTo(nodeX(n), y); started = true } else ui.path.lineTo(nodeX(n), y)
         }
-        c.drawPath(ui.path, ui.p); ui.p.style = Paint.Style.FILL
+        c.drawPath(ui.path, ui.p); ui.p.pathEffect = null; ui.p.style = Paint.Style.FILL
         for (n in 1..LEVEL_COUNT) {
             val y = nodeY(n); if (y < -60f || y > h + 60f) continue
             val x = nodeX(n)
@@ -334,7 +338,16 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             val bob = if (cur) sin(ui.timeMs / 300f) * 3f else 0f
             ui.circle(x, y + 5f + bob, r, if (open) 0xFFC73866.toInt() else 0xFF9C8CB6.toInt())
             ui.circle(x, y + bob, r, if (!open) 0xFFBBAED0.toInt() else if (st > 0) 0xFF4FD39A.toInt() else Pal.PINK)
-            ui.circle(x, y + bob - 3f, r - 6f, if (!open) 0x33FFFFFF else 0x33FFFFFF)
+            ui.circle(x, y + bob - 3f, r - 6f, 0x33FFFFFF)
+            rectF.set(x - r * 0.62f, y + bob - r * 0.86f, x + r * 0.2f, y + bob - r * 0.5f); ui.fill(0x88FFFFFF.toInt()); c.drawOval(rectF, ui.p)
+            if (cur) {
+                val pulse = (sin(ui.timeMs / 260f) * 0.5f + 0.5f)
+                ui.rrectStroke(x - r - 7f, y + bob - r - 7f, x + r + 7f, y + bob + r + 7f, r + 7f, ((90 + pulse * 165f).toInt() shl 24) or 0xFFC93C, 4f)
+                val av = env.art.icon(env.save.profile.avatar % 6, Special.NONE, (40f * scale).toInt())
+                val ay = y - r - 30f + sin(ui.timeMs / 320f) * 4f
+                ui.circle(x, ay + 3f, 24f, 0x55301856); ui.circle(x, ay, 24f, Pal.WHITE)
+                rectF.set(x - 18f, ay - 18f, x + 18f, ay + 18f); c.drawBitmap(av, null, rectF, null)
+            }
             if (open) ui.text("$n", x, y + bob, if (cur) 22f else 19f, Pal.WHITE, Paint.Align.CENTER, 0x66000000, 3f) else ui.icon(Icon.LOCK, x, y + bob, 20f)
             if (open) for (i in 0 until 3) ui.icon(if (i < st) Icon.STAR_ON else Icon.STAR_OFF, x + (i - 1) * 15f, y + r + 12f + (if (i == 1) 4f else 0f), 15f)
             if (open) ui.hit(x - r, y - r, x + r, y + r + 20f, { selLevel = n; openModal(Modal.INTRO) })
@@ -370,16 +383,17 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         ui.roundButton(34f, top + 32f, 22f, Icon.PAUSE) { openModal(Modal.PAUSE) }
         ui.text("Level ${p.levelNo}", w / 2f, top + 24f, 20f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 5f)
         ui.text(WORLD_NAMES[g.level.world], w / 2f, top + 44f, 12f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 3.5f, ui.fontBold)
-        // moves box
-        val mv = g.moves
-        ui.rrect(w - 82f, top + 10f + 4f, w - 14f, top + 62f + 4f, 14f, 0x66301856)
-        ui.rrect(w - 82f, top + 10f, w - 14f, top + 62f, 14f, Pal.WHITE)
-        ui.text("MOVES", w - 48f, top + 24f, 10f, Pal.INK2)
-        ui.text("$mv", w - 48f, top + 46f, if (mv <= 5) 26f else 24f, if (mv <= 5) 0xFFFF3B5C.toInt() else Pal.INK)
-        // objectives card
+        // moves badge
+        val mv = g.moves; val low = mv <= 5
+        val mcx = w - 44f; val mcy = top + 38f
+        ui.circle(mcx, mcy + 5f, 28f, if (low) 0xFF8A0A22.toInt() else 0xFFC98400.toInt())
+        ui.circle(mcx, mcy, 28f, if (low) 0xFFFF3B5C.toInt() else Pal.LEMON)
+        ui.circle(mcx, mcy - 4f, 22f, 0x33FFFFFF)
+        ui.text("$mv", mcx, mcy - 4f, 25f, Pal.WHITE, Paint.Align.CENTER, if (low) 0xFF8A0A22.toInt() else 0xFF9B6200.toInt(), 5f)
+        ui.text("MOVES", mcx, mcy + 15f, 8.5f, Pal.WHITE, Paint.Align.CENTER, if (low) 0xFF8A0A22.toInt() else 0xFF9B6200.toInt(), 3f, ui.fontBold)
+        // objectives panel
         val oy = top + 72f
-        ui.rrect(14f, oy + 4f, w - 14f, oy + 62f + 4f, 16f, 0x66301856)
-        ui.rrect(14f, oy, w - 14f, oy + 62f, 16f, Pal.WHITE)
+        ui.panel(14f, oy, w - 14f, oy + 62f, 18f)
         val objs = g.objectiveStatus()
         val colW = (w - 28f) / max(1, objs.size)
         for ((i, o) in objs.withIndex()) {
@@ -387,15 +401,15 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             if (o is ObjectiveStatus.Score) {
                 // score + star progress
                 val lv = g.level
-                ui.text("${p.scoreShown.toInt()}", cx, oy + 20f, 22f, Pal.INK)
+                ui.text("${p.scoreShown.toInt()}", cx, oy + 20f, 22f, Pal.WHITE, Paint.Align.CENTER, 0xFF2B1B4A.toInt(), 4f)
                 val bw = colW - 30f; val bl = cx - bw / 2f; val byy = oy + 42f
-                ui.rrect(bl, byy, bl + bw, byy + 9f, 4.5f, 0xFFE6DAF3.toInt())
+                ui.rrect(bl, byy, bl + bw, byy + 9f, 4.5f, 0x66000000)
                 val frac = (p.scoreShown / lv.stars[2]).coerceIn(0f, 1f)
-                ui.rrect(bl, byy, bl + max(9f, bw * frac), byy + 9f, 4.5f, Pal.PINK)
+                ui.gradRRect(bl, byy, bl + max(9f, bw * frac), byy + 9f, 4.5f, 0xFFFFE073.toInt(), 0xFFFF5A8E.toInt())
                 for (k in 0 until 3) ui.icon(if (g.score >= lv.stars[k]) Icon.STAR_ON else Icon.STAR_OFF, bl + bw * (lv.stars[k].toFloat() / lv.stars[2]).coerceIn(0f, 1f), byy + 4.5f, 17f)
             } else {
                 drawObjIcon(o, cx - 22f, oy + 31f, 34f)
-                ui.text(objText(o), cx + 14f, oy + 31f, 17f, if (o.done) 0xFF1C9467.toInt() else Pal.INK)
+                ui.text(objText(o), cx + 14f, oy + 31f, 17f, if (o.done) 0xFF8CFFC8.toInt() else Pal.WHITE, Paint.Align.CENTER, 0xFF2B1B4A.toInt(), 4f)
                 if (o.done) ui.icon(Icon.CHECK, cx + 36f, oy + 14f, 16f)
             }
         }
@@ -406,22 +420,26 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         p.layout(boardTop, w, availH)
         p.draw()
         // boosters
-        val by = h - ui.safeBottom - 40f
+        val by = h - ui.safeBottom - 52f
         val bs = env.save
-        val items = arrayOf(Triple(Booster.HAMMER, Icon.HAMMER, "Hammer"), Triple(Booster.SHUFFLE, Icon.SHUFFLE, "Shuffle"), Triple(Booster.MOVES, Icon.PLUS5, "+5 Moves"))
-        for ((i, it) in items.withIndex()) {
+        val items = boosterItems
+        for (i in items.indices) {
+            val it = items[i]
             val cx = w / 2f + (i - 1) * 100f
             val n = bs.boost(it.first)
             val armed = it.first == Booster.HAMMER && p.hammerArmed
-            ui.rrect(cx - 40f, by - 28f + 4f, cx + 40f, by + 28f + 4f, 18f, 0x66301856)
-            ui.rrect(cx - 40f, by - 28f, cx + 40f, by + 28f, 18f, if (armed) Pal.LEMON else Pal.WHITE)
-            ui.icon(it.second, cx, by - 7f, 30f)
-            ui.text(it.third, cx, by + 17f, 11f, Pal.INK)
-            ui.circle(cx + 34f, by - 24f, 11f, if (n > 0) Pal.PINK else 0xFFFFC93C.toInt())
-            ui.text(if (n > 0) "$n" else "+", cx + 34f, by - 24f, 12f, if (n > 0) Pal.WHITE else 0xFF5A3A00.toInt())
-            ui.hit(cx - 40f, by - 28f, cx + 40f, by + 28f, { useBooster(it.first, p) })
+            ui.circle(cx, by + 5f, 30f, 0x88301856.toInt())
+            ui.circle(cx, by, 30f, if (armed) Pal.LEMON_DARK else 0xFFB896FF.toInt())
+            ui.circle(cx, by - 1.5f, 27f, if (armed) 0xFFFFF1B8.toInt() else Pal.WHITE)
+            ui.icon(it.second, cx, by - 2f, 32f)
+            ui.text(it.third, cx, by + 42f, 11f, Pal.WHITE, Paint.Align.CENTER, 0xFF2B1B4A.toInt(), 4f, ui.fontBold)
+            ui.circle(cx + 23f, by - 23f, 11f, if (n > 0) Pal.PINK else 0xFFFFC93C.toInt())
+            ui.text(if (n > 0) "$n" else "+", cx + 23f, by - 23f, 12f, if (n > 0) Pal.WHITE else 0xFF5A3A00.toInt())
+            ui.hit(cx - 34f, by - 34f, cx + 34f, by + 50f, { useBooster(it.first, p) })
         }
     }
+
+    private val boosterItems = arrayOf(Triple(Booster.HAMMER, Icon.HAMMER, "Hammer"), Triple(Booster.SHUFFLE, Icon.SHUFFLE, "Shuffle"), Triple(Booster.MOVES, Icon.PLUS5, "+5 Moves"))
 
     private fun useBooster(b: Booster, p: Play) {
         if (!p.canAct) { toast("Wait for the candies to settle"); return }
@@ -453,7 +471,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         c.restore()
     }
 
-    private fun title(txt: String, cx: Float, y: Float) = ui.text(txt, cx, y, 28f, Pal.PINK, Paint.Align.CENTER, Pal.WHITE, 8f)
+    private fun title(txt: String, cx: Float, y: Float) = ui.ribbon(cx, y, txt)
 
     private fun closeX(r: Float, t: Float) = ui.roundButton(r - 6f, t + 6f, 17f, Icon.CLOSE) { closeModal() }
 
@@ -491,7 +509,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
                 ui.icon(Icon.STAR_ON, x - 26f, y + 32f, 22f)
                 ui.text("${lv.stars[k]}", x + 6f, y + 32f, 14f, Pal.INK, Paint.Align.LEFT)
             }
-            ui.button(l + 30f, b - 76f, r - 30f, b - 22f, "Play", Styles.PINK, { startLevel(selLevel) }, 22f)
+            ui.button(l + 30f, b - 76f, r - 30f, b - 22f, "Play", Styles.ORANGE, { startLevel(selLevel) }, 24f)
         }
     }
 
@@ -614,7 +632,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             ui.text(if (winNewBest) "New best!" else "Score", cx, t + 218f, 14f, Pal.INK2, font = ui.fontBold)
             ui.icon(Icon.COIN, cx - 28f, t + 250f, 24f); ui.text("+$winCoins", cx - 8f, t + 250f, 20f, Pal.INK, Paint.Align.LEFT)
             val next = selLevel + 1
-            if (next <= LEVEL_COUNT) ui.button(l + 30f, t + 282f, r - 30f, t + 334f, "Next level", Styles.PINK, { selLevel = next; startLevel(next) }, 20f)
+            if (next <= LEVEL_COUNT) ui.button(l + 30f, t + 282f, r - 30f, t + 334f, "Next level", Styles.ORANGE, { selLevel = next; startLevel(next) }, 20f)
             ui.button(l + 30f, t + 350f, cx - 5f, t + 396f, "Map", Styles.SKY, { leavePlay() }, 16f)
             ui.button(cx + 5f, t + 350f, r - 30f, t + 396f, "Replay", Styles.GRAPE, { startLevel(selLevel) }, 16f)
         }

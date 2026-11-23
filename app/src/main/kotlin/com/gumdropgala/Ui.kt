@@ -40,6 +40,7 @@ object Styles {
     val MINT = BtnStyle(0xFF74E4B5.toInt(), 0xFF2FC98A.toInt(), 0xFF1C9467.toInt(), 0xFFFFFFFF.toInt())
     val SKY = BtnStyle(0xFF79C8FF.toInt(), 0xFF3D9CF0.toInt(), 0xFF2670BD.toInt(), 0xFFFFFFFF.toInt())
     val LEMON = BtnStyle(0xFFFFE073.toInt(), 0xFFFFB81F.toInt(), 0xFFCC8A00.toInt(), 0xFF5A3A00.toInt())
+    val ORANGE = BtnStyle(0xFFFFC066.toInt(), 0xFFFF8A1F.toInt(), 0xFFC25200.toInt(), 0xFFFFFFFF.toInt())
     val GRAPE = BtnStyle(0xFFC3A4FF.toInt(), 0xFF8F64F0.toInt(), 0xFF6540BD.toInt(), 0xFFFFFFFF.toInt())
     val GHOST = BtnStyle(0xFFFFFFFF.toInt(), 0xFFF4E8FF.toInt(), 0xFFD4C0EE.toInt(), Pal.INK)
 }
@@ -116,8 +117,15 @@ class Ui {
         rect.set(l, t, r, b); c.drawRoundRect(rect, rad, rad, p); p.style = Paint.Style.FILL
     }
 
+    // One shared unit gradient per colour pair, stretched with the matrix: no per-frame LinearGradient allocation.
+    private val gradCache = HashMap<Long, LinearGradient>()
+    private val gradMat = android.graphics.Matrix()
+
     fun gradRRect(l: Float, t: Float, r: Float, b: Float, rad: Float, top: Int, bottom: Int) {
-        p.style = Paint.Style.FILL; p.shader = LinearGradient(0f, t, 0f, b, top, bottom, Shader.TileMode.CLAMP)
+        val key = (top.toLong() shl 32) or (bottom.toLong() and 0xFFFFFFFFL)
+        val g = gradCache.getOrPut(key) { LinearGradient(0f, 0f, 0f, 1f, top, bottom, Shader.TileMode.CLAMP) }
+        gradMat.setScale(1f, max(0.01f, b - t)); gradMat.postTranslate(0f, t); g.setLocalMatrix(gradMat)
+        p.style = Paint.Style.FILL; p.shader = g
         rect.set(l, t, r, b); c.drawRoundRect(rect, rad, rad, p); p.shader = null
     }
 
@@ -143,9 +151,30 @@ class Ui {
 
     /* ----- composite widgets ----- */
     fun card(l: Float, t: Float, r: Float, b: Float, rad: Float = 22f) {
-        rrect(l, t + 5f, r, b + 5f, rad, Pal.EDGE_SHADOW)
+        rrect(l, t + 7f, r, b + 7f, rad + 4f, 0x66301856)                     // drop shadow
+        gradRRect(l - 5f, t - 5f, r + 5f, b + 5f, rad + 5f, 0xFFB896FF.toInt(), 0xFF6A3FC4.toInt()) // purple frame
         rrect(l, t, r, b, rad, Pal.PAPER)
         rrectStroke(l + 1.5f, t + 1.5f, r - 1.5f, b - 1.5f, rad - 1f, Pal.EDGE, 3f)
+    }
+
+    /** Pink ribbon banner used as a modal title; its tails poke out past the card edge. */
+    fun ribbon(cx: Float, cy: Float, label: String, size: Float = 28f) {
+        val tw = textWidth(label, size) + 56f
+        val l = cx - tw / 2f; val r = cx + tw / 2f
+        rrect(l - 20f, cy - 16f + 10f, l + 26f, cy + 16f + 10f, 8f, 0xFFB02F5C.toInt())
+        rrect(r - 26f, cy - 16f + 10f, r + 20f, cy + 16f + 10f, 8f, 0xFFB02F5C.toInt())
+        rrect(l, cy - 22f + 5f, r, cy + 22f + 5f, 15f, 0xFFB02F5C.toInt())
+        gradRRect(l, cy - 22f, r, cy + 22f, 15f, 0xFFFF9EC0.toInt(), 0xFFFF5A8E.toInt())
+        rrect(l + 10f, cy - 19f, r - 10f, cy - 14f, 2.5f, 0x66FFFFFF)
+        text(label, cx, cy + 1f, size, Pal.WHITE, Paint.Align.CENTER, 0xFF9B2A55.toInt(), 6f)
+    }
+
+    /** Dark translucent glass panel for HUD blocks. */
+    fun panel(l: Float, t: Float, r: Float, b: Float, rad: Float = 18f) {
+        rrect(l, t + 4f, r, b + 4f, rad, 0x55200E40)
+        gradRRect(l, t, r, b, rad, 0xE05B3F96.toInt(), 0xE0301D5E.toInt())
+        rrectStroke(l + 1f, t + 1f, r - 1f, b - 1f, rad - 1f, 0x55FFFFFF, 2f)
+        rrect(l + 10f, t + 3f, r - 10f, t + 6f, 1.5f, 0x33FFFFFF)
     }
 
     fun button(l: Float, t: Float, r: Float, b: Float, label: String, style: BtnStyle, onTap: () -> Unit, size: Float = 20f, enabled: Boolean = true) {
@@ -167,7 +196,9 @@ class Ui {
         val down = pressed(cx - rad, cy - rad, cx + rad, cy + rad)
         val off = if (down) 3f else 0f
         circle(cx, cy + 5f - off, rad, 0xFFCDB8EA.toInt())
-        p.style = Paint.Style.FILL; p.shader = LinearGradient(0f, cy - rad, 0f, cy + rad, 0xFFFFFFFF.toInt(), 0xFFF1E6FF.toInt(), Shader.TileMode.CLAMP)
+        val g = gradCache.getOrPut(0x7001L) { LinearGradient(0f, 0f, 0f, 1f, 0xFFFFFFFF.toInt(), 0xFFF1E6FF.toInt(), Shader.TileMode.CLAMP) }
+        gradMat.setScale(1f, rad * 2f); gradMat.postTranslate(0f, cy - rad); g.setLocalMatrix(gradMat)
+        p.style = Paint.Style.FILL; p.shader = g
         c.drawCircle(cx, cy + off, rad, p); p.shader = null
         icon(icon, cx, cy + off, rad * 1.05f)
         hit(cx - rad, cy - rad, cx + rad, cy + rad, onTap)
@@ -301,20 +332,36 @@ class Ui {
     fun hill2(world: Int): Int = if (world == 9) hsl(265f, 0.38f, 0.42f) else hsl((hues[world % 10] + 150f) % 360f, 0.52f, 0.68f)
 
     var assets: AssetManager? = null
-    private val bgCache = HashMap<Int, Bitmap>()
+    private val bgCache = java.util.concurrent.ConcurrentHashMap<Int, Bitmap>()
+    private val bgLoading = java.util.Collections.newSetFromMap(java.util.concurrent.ConcurrentHashMap<Int, Boolean>())
+    @Volatile private var lastBg: Bitmap? = null
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-    private fun bg(world: Int): Bitmap? {
-        bgCache[world]?.let { return it }
+    private fun decodeBg(world: Int): Bitmap? {
         val am = assets ?: return null
         return try {
-            if (bgCache.size >= 3) { bgCache.values.forEach { it.recycle() }; bgCache.clear() }
             val o = BitmapFactory.Options(); o.inPreferredConfig = Bitmap.Config.RGB_565
-            val b = am.open("art/bg_${world.coerceIn(0, 9)}.webp").use { BitmapFactory.decodeStream(it, null, o) }
-            if (b != null) bgCache[world] = b
-            b
+            am.open("art/bg_${world.coerceIn(0, 9)}.webp").use { BitmapFactory.decodeStream(it, null, o) }
         } catch (e: Exception) { null }
     }
+
+    /** Returns the backdrop if ready; otherwise decodes on a worker thread and shows the previous one meanwhile. */
+    private fun bg(world: Int): Bitmap? {
+        val ready = bgCache[world]; if (ready != null) { lastBg = ready; return ready }
+        if (bgLoading.add(world)) {
+            Thread {
+                val b = decodeBg(world)
+                if (b != null) {
+                    if (bgCache.size >= 4) bgCache.keys.firstOrNull { it != world }?.let { bgCache.remove(it) }
+                    bgCache[world] = b
+                }
+                bgLoading.remove(world)
+            }.also { it.name = "bg-decode"; it.priority = Thread.MIN_PRIORITY }.start()
+        }
+        return lastBg
+    }
+
+    fun preloadBackdrop(world: Int) { bg(world) }
 
     fun backdrop(world: Int) {
         val img = bg(world)

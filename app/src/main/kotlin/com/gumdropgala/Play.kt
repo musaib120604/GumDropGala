@@ -13,7 +13,7 @@ import kotlin.math.sin
  * one at a time and animates each before asking for the next.
  */
 class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) -> Unit) {
-    val game = Game(levelConfig(levelNo))
+    val game = Game(levelConfig(levelNo), sugarCrush = true)
     private val sprites = HashMap<Int, Sprite>()
     private var iter: Iterator<Event>? = null
     private var wait = 0f
@@ -261,6 +261,16 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
                     env.fx.floatText(env.ui.w / 2f, by + bsize * 0.42f, when { e.n >= 5 -> "Divine!"; e.n == 4 -> "Delicious!"; e.n == 3 -> "Sweet!"; else -> "" }, 34f, Pal.LEMON, 1100f)
                 }
             }
+            is SugarCrush -> {
+                env.sfx(Sfx.MAKE); env.hap(Hap.STRONG)
+                env.fx.floatText(env.ui.w / 2f, by + bsize * 0.4f, "Sugar Crush!", 34f, Pal.PINK, 1400f)
+                for (cr in e.created) sp(cr.id)?.let { s ->
+                    s.special = cr.special; s.sc = 1f
+                    tw.to(s, Sprite.P_SC, 1.4f, 140f, Easing.outQ); tw.to(s, Sprite.P_SC, 1f, 300f, Easing.outElastic, 140f)
+                    env.fx.emit(px(cr.c + 0.5f), py(cr.r + 0.5f), 0xFFFFFFFF.toInt(), 8, 110f, 1, cell * 0.12f, 0f, 480f)
+                }
+                wake(650f)
+            }
             is Shuffled -> {
                 env.sfx(Sfx.SHUFFLE); env.hap(Hap.MEDIUM)
                 env.fx.floatText(env.ui.w / 2f, by + bsize / 2f, if (e.reason == "deadlock") "No moves - shuffling!" else "Shuffle!", 22f, Pal.WHITE, 1200f)
@@ -357,14 +367,8 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
         val shy = if (shake.v[0] > 0.01f) sin(timeMs * 0.17f + 1f) * shake.v[0] else 0f
         c.save(); c.translate(shx, shy)
 
-        // board plate
-        ui.rrect(bx - 8f, by - 8f + 5f, bx + bsize + 8f, by + bsize + 8f + 5f, 24f, 0x55301856)
-        ui.rrect(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0xE6FFFFFF.toInt())
-        ui.rrectStroke(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0xFFFFFFFF.toInt(), 3f)
-        for (r in 0 until H) for (cc in 0 until W) {
-            val l = bx + cc * cell; val t = by + r * cell
-            ui.rrect(l + 1f, t + 1f, l + cell - 1f, t + cell - 1f, 8f, if ((r + cc) % 2 == 0) 0x1A7A4FB8 else 0x0D7A4FB8)
-        }
+        // board plate + checker: drawn once into a bitmap, then blitted every frame
+        drawBoardLayer(c)
         // jelly
         for (r in 0 until H) for (cc in 0 until W) {
             val j = game.jelly[r][cc]
@@ -419,6 +423,43 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
         }
         c.restore()
         env.fx.draw(c, ui.p, cell, bx, by, bsize, ui.fontBlack)
+    }
+
+    private var plate: android.graphics.Bitmap? = null
+    private var plateKey = 0L
+    private val plateDst = RectF()
+
+    private fun drawBoardLayer(c: android.graphics.Canvas) {
+        val ui = env.ui
+        val sc = env.ui.w.let { if (it > 0f) (c.width.toFloat() / it) else 1f }
+        val pad = 14f
+        val wU = bsize + pad * 2f; val hU = bsize + pad * 2f + 6f
+        val wPx = (wU * sc).toInt().coerceAtLeast(1); val hPx = (hU * sc).toInt().coerceAtLeast(1)
+        val key = (wPx.toLong() shl 32) or hPx.toLong()
+        var bmp = plate
+        if (bmp == null || key != plateKey) {
+            bmp = try { android.graphics.Bitmap.createBitmap(wPx, hPx, android.graphics.Bitmap.Config.ARGB_8888) } catch (e: Throwable) { null }
+            if (bmp == null) { drawBoardLayerDirect(c); return }
+            val pc = android.graphics.Canvas(bmp)
+            pc.scale(sc, sc); pc.translate(pad - bx + 0f, pad - by)
+            val saved = ui.c; ui.c = pc
+            drawBoardLayerDirect(pc)
+            ui.c = saved
+            plate = bmp; plateKey = key
+        }
+        plateDst.set(bx - pad, by - pad, bx - pad + wU, by - pad + hU)
+        c.drawBitmap(bmp, null, plateDst, bmpPaint)
+    }
+
+    private fun drawBoardLayerDirect(c: android.graphics.Canvas) {
+        val ui = env.ui
+        ui.rrect(bx - 8f, by - 8f + 5f, bx + bsize + 8f, by + bsize + 8f + 5f, 24f, 0x55301856)
+        ui.gradRRect(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0xCC5A3F98.toInt(), 0xD9301D5E.toInt())
+        ui.rrectStroke(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0x99FFFFFF.toInt(), 3f)
+        for (r in 0 until H) for (cc in 0 until W) {
+            val l = bx + cc * cell; val t = by + r * cell
+            ui.rrect(l + 1f, t + 1f, l + cell - 1f, t + cell - 1f, 8f, if ((r + cc) % 2 == 0) 0x2EFFFFFF else 0x14FFFFFF)
+        }
     }
 
     private val flashFilter = android.graphics.PorterDuffColorFilter(0xFFFFFFFF.toInt(), android.graphics.PorterDuff.Mode.SRC_ATOP)

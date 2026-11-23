@@ -31,7 +31,7 @@ private class Expansion(val cells: List<Int>, val effects: List<Effect>, val tri
  * plays its animation, then pulls the next. Board state advances only when events are pulled, so logic and
  * animation can never overlap, and input is rejected unless [state] is [State.IDLE].
  */
-class Game(val level: LevelConfig, seed: Int = level.id * 7919 + 13, layout: List<String>? = null) {
+class Game(val level: LevelConfig, seed: Int = level.id * 7919 + 13, layout: List<String>? = null, private val sugarCrush: Boolean = false) {
     private val rng = Rng(seed)
     private val colors = level.colors
     private var nextId = 1
@@ -370,10 +370,40 @@ class Game(val level: LevelConfig, seed: Int = level.id * 7919 + 13, layout: Lis
     }
 
     private fun finishTurn(): Sequence<Event> = sequence {
-        if (isComplete()) { yieldAll(end(GameResult.WIN)); return@sequence }
+        if (isComplete()) {
+            if (sugarCrush && moves > 0) yieldAll(sugarCrushSequence())
+            yieldAll(end(GameResult.WIN)); return@sequence
+        }
         if (moves <= 0) { yieldAll(end(GameResult.LOSE)); return@sequence }
         if (!hasValidMove(grid)) yieldAll(shuffle("deadlock"))
         state = State.IDLE
+    }
+
+    /**
+     * Candy-Crush-style bonus round: each leftover move turns a random plain candy into a striped candy,
+     * then they fire one after another (each spends a move, so the flat move bonus is not paid twice).
+     */
+    private fun sugarCrushSequence(): Sequence<Event> = sequence {
+        val plain = ArrayList<Candy>()
+        for (r in 0 until H) for (c in 0 until W) grid[r][c]?.let { if (it.special == Special.NONE && it.type < BOMB_TYPE) plain.add(it) }
+        val n = minOf(moves, 8, plain.size)
+        if (n <= 0) return@sequence
+        val picked = ArrayList<Candy>()
+        repeat(n) { val i = rng.nextInt(plain.size); picked.add(plain.removeAt(i)) }
+        val created = picked.map { cd ->
+            cd.special = if (rng.next() < 0.5) Special.STRIPE_H else Special.STRIPE_V
+            CreatedSpecial(cd.id, cd.r, cd.c, cd.special, cd.type)
+        }
+        score += 250 * n // same per-move reward as the flat bonus, so stars aren't harder to earn
+        yield(SugarCrush(created, moves))
+        for (cd in picked) {
+            if (grid[cd.r][cd.c] !== cd) continue // already swept away by an earlier blast
+            moves--
+            val ex = expand(listOf(key(cd.r, cd.c)), null, null, null)
+            val plan = Plan(ex.cells, ex.effects, ex.triggered, emptyList(), emptyList(), 0, emptyList(), false)
+            yieldAll(resolve(plan, emptyList()))
+        }
+        moves = 0 // anything unspent is folded into the bonus round
     }
 
     private fun end(res: GameResult): Sequence<Event> = sequence {

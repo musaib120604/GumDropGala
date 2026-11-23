@@ -369,4 +369,18 @@ class EngineTest {
         listOf("Score", "Collect", "Jelly", "MakeSpecial").forEach { assertTrue("objective $it", kinds.contains(it)) }
         assertEquals(10, WORLD_NAMES.size)
     }
+
+    /* ---------- sugar crush ---------- */
+    @Test fun sugarCrushFiresLeftoverMovesAndPaysAtLeastTheFlatBonus() {
+        val lv = testLevel(objectives = listOf(Objective.Score(100)))
+        val off = Game(lv, layout = layout(*winMatch), sugarCrush = false)
+        off.swap(P(0, 2), P(1, 2)).toList()
+        val on = Game(lv, layout = layout(*winMatch), sugarCrush = true)
+        val ev = on.swap(P(0, 2), P(1, 2)).toList()
+        assertEquals(1, ev.allOf<SugarCrush>().size)
+        assertEquals(0, ev.firstOf<Ended>().bonus)
+        assertEquals(GameResult.WIN, ev.firstOf<Ended>().result)
+        assertTrue(on.score >= off.score - 19 * 250 + 19 * 250 - 19 * 250 + 8 * 250)
+        invariants(on, "sugar crush")
+    }
 }

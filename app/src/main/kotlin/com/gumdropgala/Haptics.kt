@@ -28,20 +28,30 @@ class Haptics(private val ctx: Context) {
         }
     } catch (e: Exception) { null }
 
-    val supported: Boolean get() = try { vibrator?.hasVibrator() == true } catch (e: Exception) { false }
+    val supported: Boolean get() = hasVib
 
     private var lastAt = 0L
     private var lockUntil = 0L
 
-    private fun systemAllows(): Boolean = try {
-        Settings.System.getInt(ctx.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0
-    } catch (e: Exception) { true }
+    // The settings lookup is a binder call; cache it so taps and matches never block the UI thread on it.
+    private var allowCheckedAt = -10_000L
+    private var allowCached = true
+    private fun systemAllows(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (now - allowCheckedAt > 3000L) {
+            allowCheckedAt = now
+            allowCached = try { Settings.System.getInt(ctx.contentResolver, Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0 } catch (e: Exception) { true }
+        }
+        return allowCached
+    }
+
+    private val hasVib: Boolean by lazy { try { vibrator?.hasVibrator() == true } catch (e: Exception) { false } }
 
     fun fire(h: Hap) {
         if (!enabled) return
         val v = vibrator ?: return
         try {
-            if (!v.hasVibrator() || !systemAllows()) return
+            if (!hasVib || !systemAllows()) return
             val now = SystemClock.uptimeMillis()
             val big = h == Hap.BOMB || h == Hap.WIN || h == Hap.HEAVY
             if (now < lockUntil && !big) return
