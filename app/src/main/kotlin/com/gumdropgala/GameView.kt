@@ -260,23 +260,25 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         canvas.restore()
     }
 
-    private fun resourceBar(showCoins: Boolean = true) {
+    private fun resourceBar(showCoins: Boolean = true, leftInset: Float = 0f, rightInset: Float = 0f) {
         val y = ui.safeTop + 30f
         val s = env.save
-        if (showCoins) ui.pill(ui.w - 14f, y, Icon.COIN, "${s.coins}", true) { openModal(Modal.SHOP) }
+        if (showCoins) ui.pill(ui.w - 14f - rightInset, y, Icon.COIN, "${s.coins}", true) { openModal(Modal.SHOP) }
         var label = "${s.lives}"
         if (s.lives < MAX_LIVES && s.livesAt > 0) {
             val ms = max(0L, s.livesAt - System.currentTimeMillis()); val sec = (ms / 1000).toInt()
             label = "${s.lives}  ${sec / 60}:${(sec % 60).toString().padStart(2, '0')}"
-        }
-        ui.pill(14f, y, Icon.HEART, label) { if (s.lives < MAX_LIVES) openModal(Modal.SHOP) }
+        } else if (s.lives >= MAX_LIVES) label = "${s.lives}  Full"
+        ui.pill(14f + leftInset, y, Icon.HEART, label) { if (s.lives < MAX_LIVES) openModal(Modal.SHOP) }
     }
 
     /* ---------------------------------------------------------------- home */
     private fun drawHome() {
         val w = ui.w; val h = ui.h; val c = ui.c
         ui.backdrop(worldOf(env.save.unlocked))
-        resourceBar()
+        resourceBar(true, 54f, 54f)
+        ui.purpleButton(34f, ui.safeTop + 30f, 21f, Icon.GEAR) { modalFrom = Modal.NONE; openModal(Modal.SETTINGS) }
+        ui.purpleButton(w - 34f, ui.safeTop + 30f, 21f, Icon.USERW) { openModal(Modal.PROFILE) }
         // bouncing candy parade
         val cy = h * 0.2f + 44f
         ui.circle(w / 2f, cy, 128f, 0x22FFFFFF); ui.circle(w / 2f, cy, 92f, 0x22FFFFFF)
@@ -289,73 +291,87 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             c.save(); c.translate(x, y); c.rotate(rot)
             rectF.set(-24f, -24f, 24f, 24f); c.drawBitmap(bmp, null, rectF, null); c.restore()
         }
-        val ty = cy + 78f
-        ui.text("Gumdrop", w / 2f, ty, 52f, Pal.WHITE, Paint.Align.CENTER, 0xFFC73866.toInt(), 14f)
-        ui.text("Gala", w / 2f, ty + 52f, 52f, Pal.LEMON, Paint.Align.CENTER, 0xFF9B6200.toInt(), 14f)
+        // gold logo with a thick chocolate outline
+        val ty = cy + 80f
+        ui.text("Gumdrop", w / 2f, ty, 56f, Pal.LEMON, Paint.Align.CENTER, 0xFF7A3E00.toInt(), 18f)
+        ui.text("Gala", w / 2f, ty + 56f, 56f, Pal.LEMON, Paint.Align.CENTER, 0xFF7A3E00.toInt(), 18f)
         val lvl = min(env.save.unlocked, LEVEL_COUNT)
-        ui.button(60f, h * 0.55f, w - 60f, h * 0.55f + 74f, "PLAY  ·  Level $lvl", Styles.ORANGE, { selLevel = lvl; openModal(Modal.INTRO) }, 26f)
-        ui.button(60f, h * 0.55f + 92f, w - 60f, h * 0.55f + 146f, "Level Map", Styles.SKY, { go(Screen.MAP) }, 19f)
-        val by = h - ui.safeBottom - 62f
-        val daily = env.save.dailyState().canClaim
-        ui.roundButton(w / 2f - 80f, by, 26f, Icon.GIFT) { dailyReward = null; openModal(Modal.DAILY) }
-        if (daily) { ui.circle(w / 2f - 62f, by - 20f, 8f, 0xFFFF3B5C.toInt()); ui.text("!", w / 2f - 62f, by - 20f, 11f, Pal.WHITE) }
-        ui.roundButton(w / 2f, by, 26f, Icon.USER) { openModal(Modal.PROFILE) }
-        ui.roundButton(w / 2f + 80f, by, 26f, Icon.SLIDERS) { openModal(Modal.SETTINGS) }
-        ui.text("${env.save.totalStars()} stars collected", w / 2f, by - 52f, 15f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 4f)
+        val py = h * 0.57f
+        ui.button(50f, py, w - 50f, py + 76f, "Play", Styles.PINK_HOT, { selLevel = lvl; openModal(Modal.INTRO) }, 32f)
+        ui.text("Level $lvl", w / 2f, py + 92f, 14f, Pal.WHITE, Paint.Align.CENTER, 0xFF8A1F5A.toInt(), 5f)
+        ui.button(70f, py + 108f, w - 70f, py + 158f, "Level Map", Styles.BLUE_PILL, { go(Screen.MAP) }, 19f)
+        val navTop = h - ui.safeBottom - 78f
+        ui.text("${env.save.totalStars()} stars collected", w / 2f, navTop - 22f, 15f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 4f)
+        ui.navBar(navTop, arrayOf("Daily", "Shop", "Map"), arrayOf(Icon.GIFT, Icon.SHOP, Icon.MAP), -1,
+            arrayOf({ dailyReward = null; openModal(Modal.DAILY) }, { openModal(Modal.SHOP) }, { go(Screen.MAP) }))
+        if (env.save.dailyState().canClaim) {
+            val cx0 = 12f + (w - 24f) / 6f
+            ui.circle(cx0 + 16f, navTop + 4f, 9f, 0xFFFF3B5C.toInt()); ui.text("!", cx0 + 16f, navTop + 4f, 12f, Pal.WHITE)
+        }
     }
 
     /* ----------------------------------------------------------------- map */
     private val NODE_DY = 78f
-    private val dotted = android.graphics.DashPathEffect(floatArrayOf(0.1f, 17f), 0f)
+    private val roadCorner = android.graphics.CornerPathEffect(36f)
+    private val roadDash = android.graphics.ComposePathEffect(android.graphics.DashPathEffect(floatArrayOf(16f, 16f), 0f), roadCorner)
 
     private fun nodeX(n: Int): Float = ui.w / 2f + sin(n * 0.85f) * 96f
-    private fun nodeY(n: Int): Float = ui.h - 150f - (n - 1) * NODE_DY + mapScroll
+    private fun nodeY(n: Int): Float = ui.h - 170f - (n - 1) * NODE_DY + mapScroll
+
+    private fun oval(cx: Float, cy: Float, rx: Float, ry: Float, color: Int) {
+        rectF.set(cx - rx, cy - ry, cx + rx, cy + ry); ui.fill(color); ui.c.drawOval(rectF, ui.p)
+    }
 
     private fun drawMap() {
         val w = ui.w; val h = ui.h; val c = ui.c
-        val centerLevel = (((h / 2f - (h - 150f + mapScroll)) / -NODE_DY) + 1).toInt().coerceIn(1, LEVEL_COUNT)
+        val centerLevel = (((h / 2f - (h - 170f + mapScroll)) / -NODE_DY) + 1).toInt().coerceIn(1, LEVEL_COUNT)
         ui.backdrop(worldOf(centerLevel))
         val unlocked = env.save.unlocked
-        // path
-        ui.p.shader = null; ui.p.style = Paint.Style.STROKE; ui.p.strokeCap = Paint.Cap.ROUND; ui.p.strokeWidth = 9f; ui.p.color = 0xE6FFFFFF.toInt(); ui.p.pathEffect = dotted
+        // candy road: pink ribbon with white dashes
         ui.path.reset()
         var started = false
         for (n in 1..LEVEL_COUNT) {
             val y = nodeY(n); if (y < -80f || y > h + 80f) { started = false; continue }
             if (!started) { ui.path.moveTo(nodeX(n), y); started = true } else ui.path.lineTo(nodeX(n), y)
         }
-        c.drawPath(ui.path, ui.p); ui.p.pathEffect = null; ui.p.style = Paint.Style.FILL
+        ui.p.shader = null; ui.p.style = Paint.Style.STROKE; ui.p.strokeJoin = Paint.Join.ROUND
+        ui.p.strokeCap = Paint.Cap.ROUND; ui.p.strokeWidth = 30f; ui.p.color = 0x55A81C62; ui.p.pathEffect = roadCorner; c.drawPath(ui.path, ui.p)
+        ui.p.strokeWidth = 24f; ui.p.color = 0xFFFFA6D0.toInt(); c.drawPath(ui.path, ui.p)
+        ui.p.strokeCap = Paint.Cap.BUTT; ui.p.color = 0xFFFFFFFF.toInt(); ui.p.pathEffect = roadDash; c.drawPath(ui.path, ui.p)
+        ui.p.pathEffect = null; ui.p.style = Paint.Style.FILL
         for (n in 1..LEVEL_COUNT) {
             val y = nodeY(n); if (y < -60f || y > h + 60f) continue
             val x = nodeX(n)
             if ((n - 1) % LEVELS_PER_WORLD == 0) {
-                val wy = y - 52f
-                ui.rrect(w / 2f - 110f, wy - 15f, w / 2f + 110f, wy + 15f, 15f, 0xCC3B2660.toInt())
-                ui.text(WORLD_NAMES[worldOf(n)], w / 2f, wy, 15f, Pal.WHITE)
+                val wy = y - 58f
+                ui.pinkPanel(w / 2f - 110f, wy - 15f, w / 2f + 110f, wy + 15f, 15f)
+                ui.text(WORLD_NAMES[worldOf(n)], w / 2f, wy, 14f, 0xFF8A2A5A.toInt())
             }
             val open = n <= unlocked; val st = env.save.stars[n]; val cur = n == unlocked
-            val r = if (cur) 28f else 24f
+            val rx = if (cur) 37f else 30f; val ry = if (cur) 27f else 21f
             val bob = if (cur) sin(ui.timeMs / 300f) * 3f else 0f
-            ui.circle(x, y + 5f + bob, r, if (open) 0xFFC73866.toInt() else 0xFF9C8CB6.toInt())
-            ui.circle(x, y + bob, r, if (!open) 0xFFBBAED0.toInt() else if (st > 0) 0xFF4FD39A.toInt() else Pal.PINK)
-            ui.circle(x, y + bob - 3f, r - 6f, 0x33FFFFFF)
-            rectF.set(x - r * 0.62f, y + bob - r * 0.86f, x + r * 0.2f, y + bob - r * 0.5f); ui.fill(0x88FFFFFF.toInt()); c.drawOval(rectF, ui.p)
             if (cur) {
-                val pulse = (sin(ui.timeMs / 260f) * 0.5f + 0.5f)
-                ui.rrectStroke(x - r - 7f, y + bob - r - 7f, x + r + 7f, y + bob + r + 7f, r + 7f, ((90 + pulse * 165f).toInt() shl 24) or 0xFFC93C, 4f)
+                val pulse = sin(ui.timeMs / 260f) * 0.5f + 0.5f
+                ui.circle(x, y + bob, 58f + pulse * 6f, 0x30FFFFFF); ui.circle(x, y + bob, 44f, 0x44FFF3B0)
+            }
+            oval(x, y + bob + 6f, rx, ry, if (open) 0xFFB8226B.toInt() else 0xFFA898C0.toInt())
+            oval(x, y + bob, rx, ry, if (open) 0xFFFF4F9A.toInt() else 0xFFD9CCE8.toInt())
+            oval(x - rx * 0.1f, y + bob - ry * 0.4f, rx * 0.78f, ry * 0.5f, 0x55FFFFFF)
+            if (open) ui.text("$n", x, y + bob, if (cur) 24f else 20f, Pal.WHITE, Paint.Align.CENTER, 0xFF9B1F5A.toInt(), 5f) else ui.icon(Icon.LOCK, x, y + bob, 20f)
+            if (open) for (i in 0 until 3) ui.icon(if (i < st) Icon.STAR_ON else Icon.STAR_OFF, x + (i - 1) * 18f, y + ry + 13f + (if (i == 1) 4f else 0f), 18f)
+            if (cur) {
                 val av = env.art.icon(env.save.profile.avatar % 6, Special.NONE, (40f * scale).toInt())
-                val ay = y - r - 30f + sin(ui.timeMs / 320f) * 4f
+                val ay = y - ry - 34f + sin(ui.timeMs / 320f) * 4f
                 ui.circle(x, ay + 3f, 24f, 0x55301856); ui.circle(x, ay, 24f, Pal.WHITE)
                 rectF.set(x - 18f, ay - 18f, x + 18f, ay + 18f); c.drawBitmap(av, null, rectF, null)
             }
-            if (open) ui.text("$n", x, y + bob, if (cur) 22f else 19f, Pal.WHITE, Paint.Align.CENTER, 0x66000000, 3f) else ui.icon(Icon.LOCK, x, y + bob, 20f)
-            if (open) for (i in 0 until 3) ui.icon(if (i < st) Icon.STAR_ON else Icon.STAR_OFF, x + (i - 1) * 15f, y + r + 12f + (if (i == 1) 4f else 0f), 15f)
-            if (open) ui.hit(x - r, y - r, x + r, y + r + 20f, { selLevel = n; openModal(Modal.INTRO) })
+            if (open) ui.hit(x - rx, y - ry, x + rx, y + ry + 24f, { selLevel = n; openModal(Modal.INTRO) })
         }
-        // header
-        ui.rrect(0f, 0f, w, ui.safeTop + 62f, 0f, 0x663B2660)
-        resourceBar()
-        ui.roundButton(w / 2f, ui.safeTop + 30f, 22f, Icon.HOME) { go(Screen.HOME) }
+        // header + tab bar
+        resourceBar(true, 0f, 54f)
+        ui.purpleButton(w - 34f, ui.safeTop + 30f, 21f, Icon.GEAR) { modalFrom = Modal.NONE; openModal(Modal.SETTINGS) }
+        ui.navBar(h - ui.safeBottom - 78f, arrayOf("Map", "Daily", "Shop", "Home"), arrayOf(Icon.MAP, Icon.GIFT, Icon.SHOP, Icon.HOME), 0,
+            arrayOf({ }, { dailyReward = null; openModal(Modal.DAILY) }, { openModal(Modal.SHOP) }, { go(Screen.HOME) }))
     }
 
     /* ---------------------------------------------------------------- play */
@@ -380,62 +396,57 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         val w = ui.w; val h = ui.h; val g = p.game
         ui.backdrop(g.level.world)
         val top = ui.safeTop
-        ui.roundButton(34f, top + 32f, 22f, Icon.PAUSE) { openModal(Modal.PAUSE) }
-        ui.text("Level ${p.levelNo}", w / 2f, top + 24f, 20f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 5f)
-        ui.text(WORLD_NAMES[g.level.world], w / 2f, top + 44f, 12f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 3.5f, ui.fontBold)
-        // moves badge
+        val ink = 0xFF8A2A5A.toInt(); val ink2 = 0xFF8A1F5A.toInt()
+        // pink HUD: moves | objectives | pause, with the star meter along the bottom
+        val pt = top + 8f; val pb = top + 102f
+        ui.pinkPanel(10f, pt, w - 10f, pb, 22f)
         val mv = g.moves; val low = mv <= 5
-        val mcx = w - 44f; val mcy = top + 38f
-        ui.circle(mcx, mcy + 5f, 28f, if (low) 0xFF8A0A22.toInt() else 0xFFC98400.toInt())
-        ui.circle(mcx, mcy, 28f, if (low) 0xFFFF3B5C.toInt() else Pal.LEMON)
-        ui.circle(mcx, mcy - 4f, 22f, 0x33FFFFFF)
-        ui.text("$mv", mcx, mcy - 4f, 25f, Pal.WHITE, Paint.Align.CENTER, if (low) 0xFF8A0A22.toInt() else 0xFF9B6200.toInt(), 5f)
-        ui.text("MOVES", mcx, mcy + 15f, 8.5f, Pal.WHITE, Paint.Align.CENTER, if (low) 0xFF8A0A22.toInt() else 0xFF9B6200.toInt(), 3f, ui.fontBold)
-        // objectives panel
-        val oy = top + 72f
-        ui.panel(14f, oy, w - 14f, oy + 62f, 18f)
+        ui.text("Moves", 52f, pt + 18f, 14f, ink, Paint.Align.CENTER, 0, 0f, ui.fontBold)
+        ui.text("$mv", 52f, pt + 46f, 34f, if (low) 0xFFE0103A.toInt() else 0xFF7A2A6A.toInt(), Paint.Align.CENTER, Pal.WHITE, 6f)
+        val bl = 96f; val br = w - 68f
+        ui.rrect(bl, pt + 10f, br, pt + 64f, 16f, 0x558A1F5A)
         val objs = g.objectiveStatus()
-        val colW = (w - 28f) / max(1, objs.size)
+        val colW = (br - bl) / max(1, objs.size)
         for ((i, o) in objs.withIndex()) {
-            val cx = 14f + colW * (i + 0.5f)
-            if (o is ObjectiveStatus.Score) {
-                // score + star progress
-                val lv = g.level
-                ui.text("${p.scoreShown.toInt()}", cx, oy + 20f, 22f, Pal.WHITE, Paint.Align.CENTER, 0xFF2B1B4A.toInt(), 4f)
-                val bw = colW - 30f; val bl = cx - bw / 2f; val byy = oy + 42f
-                ui.rrect(bl, byy, bl + bw, byy + 9f, 4.5f, 0x66000000)
-                val frac = (p.scoreShown / lv.stars[2]).coerceIn(0f, 1f)
-                ui.gradRRect(bl, byy, bl + max(9f, bw * frac), byy + 9f, 4.5f, 0xFFFFE073.toInt(), 0xFFFF5A8E.toInt())
-                for (k in 0 until 3) ui.icon(if (g.score >= lv.stars[k]) Icon.STAR_ON else Icon.STAR_OFF, bl + bw * (lv.stars[k].toFloat() / lv.stars[2]).coerceIn(0f, 1f), byy + 4.5f, 17f)
-            } else {
-                drawObjIcon(o, cx - 22f, oy + 31f, 34f)
-                ui.text(objText(o), cx + 14f, oy + 31f, 17f, if (o.done) 0xFF8CFFC8.toInt() else Pal.WHITE, Paint.Align.CENTER, 0xFF2B1B4A.toInt(), 4f)
-                if (o.done) ui.icon(Icon.CHECK, cx + 36f, oy + 14f, 16f)
-            }
+            val cx = bl + colW * (i + 0.5f); val cy = pt + 37f
+            val label = if (o is ObjectiveStatus.Score) "${o.target}" else objText(o)
+            drawObjIcon(o, cx - 22f, cy, 30f)
+            ui.text(label, cx + 12f, cy, if (label.length > 5) 15f else 18f, if (o.done) 0xFF8CFFC8.toInt() else Pal.WHITE, Paint.Align.CENTER, ink2, 4f)
+            if (o.done) ui.icon(Icon.CHECK, cx - 8f, cy - 15f, 14f)
         }
-        // score line when no score objective
-        if (objs.none { it is ObjectiveStatus.Score }) ui.text("Score ${p.scoreShown.toInt()}", w / 2f, oy + 80f, 14f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 4f)
-        val boardTop = oy + 96f
-        val availH = h - ui.safeBottom - 84f - boardTop - 18f
-        p.layout(boardTop, w, availH)
+        ui.roundButton(w - 40f, pt + 37f, 22f, Icon.PAUSE) { openModal(Modal.PAUSE) }
+        // star progress
+        val lv = g.level
+        val bx0 = 28f; val bx1 = w - 28f; val byy = pb - 17f
+        ui.rrect(bx0, byy - 5f, bx1, byy + 5f, 5f, 0x99702060.toInt())
+        val frac = (p.scoreShown / lv.stars[2]).coerceIn(0f, 1f)
+        ui.gradRRect(bx0, byy - 5f, bx0 + max(10f, (bx1 - bx0) * frac), byy + 5f, 5f, 0xFFFFE073.toInt(), 0xFFFFA81F.toInt())
+        for (k in 0 until 3) ui.icon(if (g.score >= lv.stars[k]) Icon.STAR_ON else Icon.STAR_OFF, bx0 + (bx1 - bx0) * (lv.stars[k].toFloat() / lv.stars[2]).coerceIn(0f, 1f) - (if (k == 2) 6f else 0f), byy, 20f)
+        ui.text("Level ${p.levelNo}  ·  Score ${p.scoreShown.toInt()}", w / 2f, pb + 20f, 15f, Pal.WHITE, Paint.Align.CENTER, Pal.INK, 4.5f)
+        // board, centred in the space between the HUD and the booster bar
+        val barTop = h - ui.safeBottom - 98f
+        val boardTop = pb + 40f
+        val availH = barTop - 16f - boardTop
+        val side = min(w - 20f, availH)
+        p.layout(boardTop + max(0f, (availH - side) / 2f), w, availH)
         p.draw()
-        // boosters
-        val by = h - ui.safeBottom - 52f
+        // booster bar
+        ui.pinkPanel(14f, barTop, w - 14f, barTop + 84f, 24f)
         val bs = env.save
         val items = boosterItems
         for (i in items.indices) {
             val it = items[i]
-            val cx = w / 2f + (i - 1) * 100f
+            val cx = w / 2f + (i - 1) * 92f; val cy = barTop + 35f
             val n = bs.boost(it.first)
             val armed = it.first == Booster.HAMMER && p.hammerArmed
-            ui.circle(cx, by + 5f, 30f, 0x88301856.toInt())
-            ui.circle(cx, by, 30f, if (armed) Pal.LEMON_DARK else 0xFFB896FF.toInt())
-            ui.circle(cx, by - 1.5f, 27f, if (armed) 0xFFFFF1B8.toInt() else Pal.WHITE)
-            ui.icon(it.second, cx, by - 2f, 32f)
-            ui.text(it.third, cx, by + 42f, 11f, Pal.WHITE, Paint.Align.CENTER, 0xFF2B1B4A.toInt(), 4f, ui.fontBold)
-            ui.circle(cx + 23f, by - 23f, 11f, if (n > 0) Pal.PINK else 0xFFFFC93C.toInt())
-            ui.text(if (n > 0) "$n" else "+", cx + 23f, by - 23f, 12f, if (n > 0) Pal.WHITE else 0xFF5A3A00.toInt())
-            ui.hit(cx - 34f, by - 34f, cx + 34f, by + 50f, { useBooster(it.first, p) })
+            ui.circle(cx, cy + 4f, 29f, 0xFF1458A8.toInt())
+            ui.circle(cx, cy, 29f, if (armed) Pal.LEMON_DARK else 0xFF3D9CF0.toInt())
+            ui.circle(cx, cy - 1f, 24f, if (armed) 0xFFFFF1B8.toInt() else 0xFFF3FAFF.toInt())
+            ui.icon(it.second, cx, cy - 1f, 30f)
+            ui.circle(cx + 22f, cy + 22f, 11f, Pal.WHITE); ui.circle(cx + 22f, cy + 22f, 9f, if (n > 0) 0xFFFF4F9A.toInt() else 0xFFFFC93C.toInt())
+            ui.text(if (n > 0) "$n" else "+", cx + 22f, cy + 22f, 12f, if (n > 0) Pal.WHITE else 0xFF5A3A00.toInt())
+            ui.text(it.third, cx, barTop + 74f, 10.5f, ink, Paint.Align.CENTER, 0, 0f, ui.fontBold)
+            ui.hit(cx - 34f, barTop + 2f, cx + 34f, barTop + 82f, { useBooster(it.first, p) })
         }
     }
 
@@ -509,7 +520,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
                 ui.icon(Icon.STAR_ON, x - 26f, y + 32f, 22f)
                 ui.text("${lv.stars[k]}", x + 6f, y + 32f, 14f, Pal.INK, Paint.Align.LEFT)
             }
-            ui.button(l + 30f, b - 76f, r - 30f, b - 22f, "Play", Styles.ORANGE, { startLevel(selLevel) }, 24f)
+            ui.button(l + 30f, b - 76f, r - 30f, b - 22f, "Play", Styles.PINK_HOT, { startLevel(selLevel) }, 24f)
         }
     }
 
@@ -632,7 +643,7 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             ui.text(if (winNewBest) "New best!" else "Score", cx, t + 218f, 14f, Pal.INK2, font = ui.fontBold)
             ui.icon(Icon.COIN, cx - 28f, t + 250f, 24f); ui.text("+$winCoins", cx - 8f, t + 250f, 20f, Pal.INK, Paint.Align.LEFT)
             val next = selLevel + 1
-            if (next <= LEVEL_COUNT) ui.button(l + 30f, t + 282f, r - 30f, t + 334f, "Next level", Styles.ORANGE, { selLevel = next; startLevel(next) }, 20f)
+            if (next <= LEVEL_COUNT) ui.button(l + 30f, t + 282f, r - 30f, t + 334f, "Next level", Styles.PINK_HOT, { selLevel = next; startLevel(next) }, 20f)
             ui.button(l + 30f, t + 350f, cx - 5f, t + 396f, "Map", Styles.SKY, { leavePlay() }, 16f)
             ui.button(cx + 5f, t + 350f, r - 30f, t + 396f, "Replay", Styles.GRAPE, { startLevel(selLevel) }, 16f)
         }

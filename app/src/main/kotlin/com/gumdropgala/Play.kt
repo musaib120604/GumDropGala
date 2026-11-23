@@ -466,7 +466,7 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
     private fun drawBoardLayerDirect(c: android.graphics.Canvas) {
         val ui = env.ui
         ui.rrect(bx - 8f, by - 8f + 5f, bx + bsize + 8f, by + bsize + 8f + 5f, 24f, 0x55301856)
-        ui.gradRRect(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0xCC5A3F98.toInt(), 0xD9301D5E.toInt())
+        ui.gradRRect(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0xDD2C5088.toInt(), 0xE81B2F63.toInt())
         ui.rrectStroke(bx - 8f, by - 8f, bx + bsize + 8f, by + bsize + 8f, 24f, 0x99FFFFFF.toInt(), 3f)
         for (r in 0 until H) for (cc in 0 until W) {
             val l = bx + cc * cell; val t = by + r * cell

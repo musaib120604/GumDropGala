@@ -33,7 +33,7 @@ object Pal {
     const val SCRIM = 0x8C301856.toInt()
 }
 
-class BtnStyle(val top: Int, val bottom: Int, val ledge: Int, val text: Int)
+class BtnStyle(val top: Int, val bottom: Int, val ledge: Int, val text: Int, val pill: Boolean = false)
 
 object Styles {
     val PINK = BtnStyle(0xFFFF93B9.toInt(), 0xFFFF5A8E.toInt(), 0xFFC73866.toInt(), 0xFFFFFFFF.toInt())
@@ -41,11 +41,13 @@ object Styles {
     val SKY = BtnStyle(0xFF79C8FF.toInt(), 0xFF3D9CF0.toInt(), 0xFF2670BD.toInt(), 0xFFFFFFFF.toInt())
     val LEMON = BtnStyle(0xFFFFE073.toInt(), 0xFFFFB81F.toInt(), 0xFFCC8A00.toInt(), 0xFF5A3A00.toInt())
     val ORANGE = BtnStyle(0xFFFFC066.toInt(), 0xFFFF8A1F.toInt(), 0xFFC25200.toInt(), 0xFFFFFFFF.toInt())
+    val PINK_HOT = BtnStyle(0xFFFFA3CF.toInt(), 0xFFE8236E.toInt(), 0xFFA8124A.toInt(), 0xFFFFFFFF.toInt(), true)
+    val BLUE_PILL = BtnStyle(0xFF6CC0FF.toInt(), 0xFF1F7BE0.toInt(), 0xFF1458A8.toInt(), 0xFFFFFFFF.toInt(), true)
     val GRAPE = BtnStyle(0xFFC3A4FF.toInt(), 0xFF8F64F0.toInt(), 0xFF6540BD.toInt(), 0xFFFFFFFF.toInt())
     val GHOST = BtnStyle(0xFFFFFFFF.toInt(), 0xFFF4E8FF.toInt(), 0xFFD4C0EE.toInt(), Pal.INK)
 }
 
-enum class Icon { COIN, HEART, STAR_ON, STAR_OFF, GIFT, USER, HOME, PAUSE, SLIDERS, LOCK, HAMMER, SHUFFLE, PLUS5, CHECK, CLOSE, JELLY }
+enum class Icon { GEAR, SHOP, MAP, USERW, COIN, HEART, STAR_ON, STAR_OFF, GIFT, USER, HOME, PAUSE, SLIDERS, LOCK, HAMMER, SHUFFLE, PLUS5, CHECK, CLOSE, JELLY }
 
 class Hit(val l: Float, val t: Float, val r: Float, val b: Float, val onTap: (() -> Unit)?, val onDrag: ((Float, Float) -> Unit)?) {
     fun contains(x: Float, y: Float): Boolean = x >= l && x <= r && y >= t && y <= b
@@ -169,6 +171,44 @@ class Ui {
         text(label, cx, cy + 1f, size, Pal.WHITE, Paint.Align.CENTER, 0xFF9B2A55.toInt(), 6f)
     }
 
+    /** Candy-pink rounded bar with a white rim: top HUD, booster bar and tab bar. */
+    fun pinkPanel(l: Float, t: Float, r: Float, b: Float, rad: Float = 22f) {
+        rrect(l, t + 6f, r, b + 6f, rad, 0x66A81C62)
+        gradRRect(l - 2f, t - 2f, r + 2f, b + 2f, rad + 2f, 0xFFFFFFFF.toInt(), 0xFFFFE0F0.toInt())
+        gradRRect(l + 2f, t + 2f, r - 2f, b - 2f, rad - 2f, 0xFFFFC6E0.toInt(), 0xFFFF8EC0.toInt())
+        rrect(l + 16f, t + 6f, r - 16f, t + 10f, 2f, 0x77FFFFFF)
+    }
+
+    /** Round purple icon button (settings, profile). */
+    fun purpleButton(cx: Float, cy: Float, rad: Float, icon: Icon, onTap: () -> Unit) {
+        val down = pressed(cx - rad, cy - rad, cx + rad, cy + rad)
+        val off = if (down) 3f else 0f
+        circle(cx, cy + 4f - off, rad, 0xFF5A2FA8.toInt())
+        circle(cx, cy + off, rad, 0xFF9A66F2.toInt())
+        circle(cx, cy + off - 2f, rad - 3f, 0xFFB68CFF.toInt())
+        rrect(cx - rad * 0.55f, cy + off - rad * 0.8f, cx + rad * 0.55f, cy + off - rad * 0.55f, 3f, 0x66FFFFFF)
+        icon(icon, cx, cy + off, rad * 1.15f)
+        hit(cx - rad, cy - rad, cx + rad, cy + rad, onTap)
+    }
+
+    /** Bottom tab bar; the selected tab pops up out of the bar. */
+    fun navBar(top: Float, labels: Array<String>, icons: Array<Icon>, sel: Int, taps: Array<() -> Unit>) {
+        val l = 12f; val r = w - 12f; val b = top + 64f
+        pinkPanel(l, top, r, b, 26f)
+        val n = labels.size; val cw = (r - l) / n
+        for (i in 0 until n) {
+            val cx = l + cw * (i + 0.5f)
+            val on = i == sel
+            if (on) {
+                gradRRect(cx - cw / 2f + 5f, top - 16f, cx + cw / 2f - 5f, b - 3f, 24f, 0xFFFFFFFF.toInt(), 0xFFFFD2E8.toInt())
+                rrectStroke(cx - cw / 2f + 5f, top - 16f, cx + cw / 2f - 5f, b - 3f, 24f, 0xFFFF8EC0.toInt(), 3f)
+            }
+            icon(icons[i], cx, top + (if (on) 14f else 22f), if (on) 34f else 30f)
+            text(labels[i], cx, top + (if (on) 47f else 49f), 11.5f, 0xFF8A2A5A.toInt(), Paint.Align.CENTER, 0, 0f, fontBold)
+            hit(cx - cw / 2f, top - 16f, cx + cw / 2f, b, taps[i])
+        }
+    }
+
     /** Dark translucent glass panel for HUD blocks. */
     fun panel(l: Float, t: Float, r: Float, b: Float, rad: Float = 18f) {
         rrect(l, t + 4f, r, b + 4f, rad, 0x55200E40)
@@ -180,13 +220,14 @@ class Ui {
     fun button(l: Float, t: Float, r: Float, b: Float, label: String, style: BtnStyle, onTap: () -> Unit, size: Float = 20f, enabled: Boolean = true) {
         val down = enabled && pressed(l, t, r, b)
         val off = if (down) 4f else 0f
-        val rad = min(18f, (b - t) / 2.4f)
+        val rad = if (style.pill) (b - t) / 2f else min(18f, (b - t) / 2.4f)
         val ledge = if (enabled) style.ledge else 0xFFB9AECB.toInt()
         val top = if (enabled) style.top else 0xFFE4DCEE.toInt()
         val bot = if (enabled) style.bottom else 0xFFCFC4DE.toInt()
         rrect(l, t + 6f, r, b + 6f - off, rad, ledge)
         gradRRect(l, t + off, r, b + off, rad, top, bot)
-        rrect(l + 5f, t + off + 3f, r - 5f, t + off + 6f, 1.5f, 0x66FFFFFF)
+        val hl = if (style.pill) rad * 0.7f else 5f
+        rrect(l + hl, t + off + 3f, r - hl, t + off + 7f, 2f, 0x77FFFFFF)
         val txt = if (enabled) style.text else 0xFFFFFFFF.toInt()
         text(label, (l + r) / 2f, (t + b) / 2f + off, size, txt, Paint.Align.CENTER, if (style === Styles.GHOST || style === Styles.LEMON) 0 else (ledge and 0x00FFFFFF) or 0x66000000, 3f)
         if (enabled) hit(l, t, r, b, onTap)
@@ -234,6 +275,27 @@ class Ui {
         c.save(); c.translate(cx, cy); val k = size / 24f; c.scale(k, k)
         p.shader = null
         when (ic) {
+            Icon.GEAR -> {
+                for (i in 0 until 8) { c.save(); c.rotate(i * 45f); rrect(-2.4f, -11.8f, 2.4f, -6.5f, 1.3f, Pal.WHITE); c.restore() }
+                circle(0f, 0f, 8.6f, Pal.WHITE); circle(0f, 0f, 3.8f, 0xFF8F64F0.toInt())
+            }
+            Icon.USERW -> {
+                circle(0f, -4f, 4.8f, Pal.WHITE)
+                path.reset(); path.moveTo(-8.4f, 9f); path.cubicTo(-7.8f, 4.4f, -4f, 2.4f, 0f, 2.4f); path.cubicTo(4f, 2.4f, 7.8f, 4.4f, 8.4f, 9f); path.close()
+                fill(Pal.WHITE); c.drawPath(path, p)
+            }
+            Icon.SHOP -> {
+                rrect(-8f, -3f, 8f, 9.5f, 2.2f, 0xFFFFF1E0.toInt()); rrectStroke(-8f, -3f, 8f, 9.5f, 2.2f, 0xFFC23A69.toInt(), 1.5f)
+                rrect(-10f, -9.5f, 10f, -2.5f, 2.5f, Pal.WHITE); rrectStroke(-10f, -9.5f, 10f, -2.5f, 2.5f, 0xFFC23A69.toInt(), 1.5f)
+                for (k in 0 until 3) rrect(-10f + k * 6.7f + 1.2f, -9.2f, -10f + k * 6.7f + 4.6f, -2.8f, 1.5f, 0xFFFF5A8E.toInt())
+                rrect(-2.6f, 1.5f, 2.6f, 9.5f, 1.2f, 0xFF8F64F0.toInt())
+            }
+            Icon.MAP -> {
+                rrect(-10f, -8f, 10f, 8.5f, 2.5f, 0xFF8FD8FF.toInt()); rrectStroke(-10f, -8f, 10f, 8.5f, 2.5f, 0xFF2670BD.toInt(), 1.6f)
+                p.style = Paint.Style.STROKE; p.strokeWidth = 1.3f; p.color = 0xFF2670BD.toInt()
+                c.drawLine(-3.4f, -8f, -3.4f, 8.5f, p); c.drawLine(3.4f, -8f, 3.4f, 8.5f, p); p.style = Paint.Style.FILL
+                circle(1.5f, -1.5f, 3.4f, 0xFFFF3B6E.toInt()); circle(1.5f, -2.2f, 1.2f, Pal.WHITE)
+            }
             Icon.COIN -> {
                 circle(0f, 0f, 10f, 0xFFFFC93C.toInt()); strokeCircle(0f, 0f, 10f, 0xFFC98400.toInt(), 1.8f)
                 strokeCircle(0f, 0f, 6.6f, 0xFFE9A000.toInt(), 1.6f)
