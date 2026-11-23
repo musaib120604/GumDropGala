@@ -5,6 +5,7 @@ import android.graphics.RectF
 import com.gumdropgala.engine.*
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -375,6 +376,11 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
     /* -------------------------------------------------------------- draw */
     fun draw() {
         val ui = env.ui; val c = ui.c
+        // size the candy art to the real on-screen cell so sprites blit 1:1 (sharper and cheaper than resampling)
+        if (ui.w > 0f && cell > 0f) {
+            val want = max(24, (cell * 0.98f * (c.width.toFloat() / ui.w)).roundToInt())
+            if (kotlin.math.abs(want - env.art.currentSize) > 0) env.art.rebuild(want, env.save.settings.symbols)
+        }
         val shx = if (shake.v[0] > 0.01f) sin(timeMs * 0.12f) * shake.v[0] else 0f
         val shy = if (shake.v[0] > 0.01f) sin(timeMs * 0.17f + 1f) * shake.v[0] else 0f
         c.save(); c.translate(shx, shy)

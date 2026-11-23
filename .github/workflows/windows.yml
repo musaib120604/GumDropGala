@@ -1,0 +1,82 @@
+name: Build Gumdrop Gala for Windows
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write   # lets tagged builds attach the zip/installer to a GitHub release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.10.2" }
+
+      - name: Build desktop distribution
+        run: gradle :desktop:installDist --no-daemon --stacktrace
+
+      - name: Render UI screenshots (headless smoke test)
+        shell: pwsh
+        run: |
+          & "desktop\build\install\GumdropGala\bin\GumdropGala.bat" --screenshots screenshots
+          if (-not (Test-Path screenshots\5_play_settled.png)) { throw "screenshots were not produced" }
+
+      - name: Package portable app (no install needed)
+        shell: pwsh
+        run: |
+          $ver = "1.0.${{ github.run_number }}"
+          jpackage --type app-image --name GumdropGala --app-version $ver `
+            --vendor "Gumdrop Gala" --description "Gumdrop Gala match-3 puzzle" `
+            --input desktop\build\install\GumdropGala\lib `
+            --main-jar gumdrop-gala-desktop.jar --main-class com.gumdropgala.desktop.DesktopMainKt `
+            --icon desktop\icon.ico --java-options "-Xms64m" --java-options "-Xmx768m" `
+            --dest dist
+          Compress-Archive -Path dist\GumdropGala -DestinationPath GumdropGala-windows.zip
+
+      - name: Build installer (.msi)
+        continue-on-error: true   # needs the WiX toolset; the portable zip above is the fallback
+        shell: pwsh
+        run: |
+          $ver = "1.0.${{ github.run_number }}"
+          jpackage --type msi --name GumdropGala --app-version $ver `
+            --vendor "Gumdrop Gala" --description "Gumdrop Gala match-3 puzzle" `
+            --input desktop\build\install\GumdropGala\lib `
+            --main-jar gumdrop-gala-desktop.jar --main-class com.gumdropgala.desktop.DesktopMainKt `
+            --icon desktop\icon.ico --java-options "-Xms64m" --java-options "-Xmx768m" `
+            --win-menu --win-shortcut --win-dir-chooser --win-per-user-install `
+            --dest installer
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GumdropGala-windows-portable
+          path: GumdropGala-windows.zip
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('installer/*.msi') != ''
+        with:
+          name: GumdropGala-windows-installer
+          path: installer/*.msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: screenshots/*.png
+
+      - name: Attach to GitHub release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            GumdropGala-windows.zip
+            installer/*.msi

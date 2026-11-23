@@ -223,6 +223,9 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         }
     }
 
+    /** Desktop: the mouse wheel scrolls the level map. */
+    fun scrollMap(dy: Float) { if (screen == Screen.MAP && modal == Modal.NONE) mapScroll = (mapScroll + dy).coerceIn(0f, max(0f, mapMax())) }
+
     private fun mapMax() = 100 * NODE_DY + 360f - ui.h
     private fun centerMapOn(level: Int) { mapScroll = ((level - 1) * NODE_DY - 140f).coerceIn(0f, max(0f, 100 * NODE_DY + 360f - 640f)) }
 
@@ -342,11 +345,6 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
         for (n in 1..LEVEL_COUNT) {
             val y = nodeY(n); if (y < -60f || y > h + 60f) continue
             val x = nodeX(n)
-            if ((n - 1) % LEVELS_PER_WORLD == 0) {
-                val wy = y - 58f
-                ui.pinkPanel(w / 2f - 110f, wy - 15f, w / 2f + 110f, wy + 15f, 15f)
-                ui.text(WORLD_NAMES[worldOf(n)], w / 2f, wy, 14f, 0xFF8A2A5A.toInt())
-            }
             val open = n <= unlocked; val st = env.save.stars[n]; val cur = n == unlocked
             val rx = if (cur) 37f else 30f; val ry = if (cur) 27f else 21f
             val bob = if (cur) sin(ui.timeMs / 300f) * 3f else 0f
@@ -361,13 +359,19 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
             if (open) for (i in 0 until 3) ui.icon(if (i < st) Icon.STAR_ON else Icon.STAR_OFF, x + (i - 1) * 18f, y + ry + 13f + (if (i == 1) 4f else 0f), 18f)
             if (cur) {
                 val av = env.art.icon(env.save.profile.avatar % 6, Special.NONE, (40f * scale).toInt())
-                val ay = y - ry - 34f + sin(ui.timeMs / 320f) * 4f
-                ui.circle(x, ay + 3f, 24f, 0x55301856); ui.circle(x, ay, 24f, Pal.WHITE)
-                rectF.set(x - 18f, ay - 18f, x + 18f, ay + 18f); c.drawBitmap(av, null, rectF, null)
+                val side = if (nodeX(n + 1) > x) -1f else 1f
+                val ax = (x + side * (rx + 36f)).coerceIn(30f, w - 30f)
+                val ay = y + bob - 6f + sin(ui.timeMs / 320f) * 3f
+                ui.circle(ax, ay + 3f, 24f, 0x55301856); ui.circle(ax, ay, 24f, Pal.WHITE)
+                rectF.set(ax - 18f, ay - 18f, ax + 18f, ay + 18f); c.drawBitmap(av, null, rectF, null)
             }
             if (open) ui.hit(x - rx, y - ry, x + rx, y + ry + 24f, { selLevel = n; openModal(Modal.INTRO) })
         }
         // header + tab bar
+        val worldLabel = WORLD_NAMES[worldOf(centerLevel)]
+        val chipW = ui.textWidth(worldLabel, 14f) + 44f
+        ui.pinkPanel(w / 2f - chipW / 2f, ui.safeTop + 62f, w / 2f + chipW / 2f, ui.safeTop + 90f, 14f)
+        ui.text(worldLabel, w / 2f, ui.safeTop + 76f, 14f, 0xFF8A2A5A.toInt())
         resourceBar(true, 0f, 54f)
         ui.purpleButton(w - 34f, ui.safeTop + 30f, 21f, Icon.GEAR) { modalFrom = Modal.NONE; openModal(Modal.SETTINGS) }
         ui.navBar(h - ui.safeBottom - 78f, arrayOf("Map", "Daily", "Shop", "Home"), arrayOf(Icon.MAP, Icon.GIFT, Icon.SHOP, Icon.HOME), 0,
@@ -555,19 +559,20 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
 
     private fun drawSettings() {
         val s = env.save.settings
-        card(310f, 520f) { l0, t, r0, b ->
+        val vib = env.hap.supported // phones with a vibration motor only
+        card(310f, if (vib) 520f else 408f) { l0, t, r0, b ->
             val l = l0 + 26f; val r = r0 - 26f; val cx = (l0 + r0) / 2f
             ui.roundButton(r0 - 6f, t + 6f, 17f, Icon.CLOSE) { modal = if (modalFrom == Modal.PAUSE) Modal.PAUSE else Modal.NONE; modalFrom = Modal.NONE }
             title("Settings", cx, t + 40f)
             slider(l, r, t + 100f, "Music", s.music) { s.music = it; env.applySettings() }
             slider(l, r, t + 160f, "Sound effects", s.sfx) { s.sfx = it; env.applySettings() }
-            toggle(l, r, t + 214f, "Vibration", s.vibrate) { s.vibrate = it; if (it) env.hap.fire(Hap.STRONG) }
-            toggle(l, r, t + 256f, "Reduce motion", s.reduceMotion) { s.reduceMotion = it }
-            toggle(l, r, t + 298f, "Candy symbols", s.symbols) { s.symbols = it; env.art.rebuild(max(24, (42f * 0.98f * scale).toInt()), it) }
-            toggle(l, r, t + 340f, "Larger text", s.bigText) { s.bigText = it }
-            if (!env.hap.supported) ui.text("This device reports no vibration motor", cx, t + 372f, 12f, Pal.INK2, font = ui.fontBold)
-            ui.button(l, t + 392f, r, t + 436f, "Test vibration", Styles.SKY, { env.hap.fire(Hap.HEAVY); env.hap.fire(Hap.BOMB) }, 16f)
-            ui.button(l, t + 452f, r, t + 496f, "Done", Styles.MINT, { env.persist(); modal = if (modalFrom == Modal.PAUSE) Modal.PAUSE else Modal.NONE; modalFrom = Modal.NONE }, 17f)
+            var y = t + 214f
+            if (vib) { toggle(l, r, y, "Vibration", s.vibrate) { s.vibrate = it; if (it) env.hap.fire(Hap.STRONG) }; y += 42f }
+            toggle(l, r, y, "Reduce motion", s.reduceMotion) { s.reduceMotion = it }; y += 42f
+            toggle(l, r, y, "Candy symbols", s.symbols) { s.symbols = it; env.art.rebuild(max(24, (42f * 0.98f * scale).toInt()), it) }; y += 42f
+            toggle(l, r, y, "Larger text", s.bigText) { s.bigText = it }; y += 52f
+            if (vib) { ui.button(l, y, r, y + 44f, "Test vibration", Styles.SKY, { env.hap.fire(Hap.HEAVY); env.hap.fire(Hap.BOMB) }, 16f); y += 60f }
+            ui.button(l, y, r, y + 44f, "Done", Styles.MINT, { env.persist(); modal = if (modalFrom == Modal.PAUSE) Modal.PAUSE else Modal.NONE; modalFrom = Modal.NONE }, 17f)
         }
     }
 

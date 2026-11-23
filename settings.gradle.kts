@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "gumdrop-gala"
-include(":engine", ":app")
+include(":engine", ":app", ":desktop")

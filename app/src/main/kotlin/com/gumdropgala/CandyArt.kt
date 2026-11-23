@@ -40,6 +40,8 @@ class CandyArt {
     @Volatile private var symbols = false
     @Volatile private var gen = 0
 
+    val currentSize: Int get() = size
+
     fun rebuild(px: Int, symbols: Boolean) {
         if (px == size && symbols == this.symbols && cache.isNotEmpty()) return
         cache.clear() // don't recycle: a frame may still be drawing these; GC reclaims them

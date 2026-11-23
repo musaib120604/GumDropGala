@@ -127,7 +127,7 @@ class Ui {
         val key = (top.toLong() shl 32) or (bottom.toLong() and 0xFFFFFFFFL)
         val g = gradCache.getOrPut(key) { LinearGradient(0f, 0f, 0f, 1f, top, bottom, Shader.TileMode.CLAMP) }
         gradMat.setScale(1f, max(0.01f, b - t)); gradMat.postTranslate(0f, t); g.setLocalMatrix(gradMat)
-        p.style = Paint.Style.FILL; p.shader = g
+        p.style = Paint.Style.FILL; p.color = 0xFFFFFFFF.toInt(); p.shader = g
         rect.set(l, t, r, b); c.drawRoundRect(rect, rad, rad, p); p.shader = null
     }
 
@@ -239,7 +239,7 @@ class Ui {
         circle(cx, cy + 5f - off, rad, 0xFFCDB8EA.toInt())
         val g = gradCache.getOrPut(0x7001L) { LinearGradient(0f, 0f, 0f, 1f, 0xFFFFFFFF.toInt(), 0xFFF1E6FF.toInt(), Shader.TileMode.CLAMP) }
         gradMat.setScale(1f, rad * 2f); gradMat.postTranslate(0f, cy - rad); g.setLocalMatrix(gradMat)
-        p.style = Paint.Style.FILL; p.shader = g
+        p.style = Paint.Style.FILL; p.color = 0xFFFFFFFF.toInt(); p.shader = g
         c.drawCircle(cx, cy + off, rad, p); p.shader = null
         icon(icon, cx, cy + off, rad * 1.05f)
         hit(cx - rad, cy - rad, cx + rad, cy + rad, onTap)
