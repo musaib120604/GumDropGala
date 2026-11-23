@@ -127,7 +127,7 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
             return
         }
         dragged = true
-        dragSprite?.let { env.tw.cancel(it); it.sx = 1f; it.sy = 1f }
+        dragSprite?.let { env.tw.cancel(it); it.sx = 1f; it.sy = 1f; it.x = from.c + 0.5f; it.y = from.r + 0.5f }
         dragSprite = null
         val to = if (abs(dx) > abs(dy)) Pos(from.r, from.c + if (dx > 0) 1 else -1) else Pos(from.r + if (dy > 0) 1 else -1, from.c)
         downCell = null; selected = null
@@ -177,7 +177,18 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
 
     private var endedFired = false
 
-    private fun afterTurn() { idleMs = 0f; hint = null }
+    private fun afterTurn() { idleMs = 0f; hint = null; snapSprites() }
+
+    /** Safety net: once everything has settled, every candy must sit exactly on its grid cell. */
+    private fun snapSprites() {
+        for (cd in game.allCandies()) {
+            val s = sprites[cd.id] ?: continue
+            val tx = cd.c + 0.5f; val ty = cd.r + 0.5f
+            if (abs(s.x - tx) > 0.001f || abs(s.y - ty) > 0.001f) { s.x = tx; s.y = ty }
+            s.sx = 1f; s.sy = 1f; s.rot = 0f; s.a = 1f
+            if (s.special == Special.NONE) s.sc = 1f
+        }
+    }
 
     private fun sp(id: Int): Sprite? = sprites[id]
 
@@ -191,7 +202,8 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
                 val a = sp(game.grid[e.a.r][e.a.c]?.id ?: -1); val b = sp(game.grid[e.b.r][e.b.c]?.id ?: -1)
                 env.sfx(Sfx.INVALID); env.hap(Hap.REJECT)
                 if (a != null && b != null) {
-                    val ax = a.x; val ay = a.y; val bx2 = b.x; val by2 = b.y
+                    val ax = e.a.c + 0.5f; val ay = e.a.r + 0.5f; val bx2 = e.b.c + 0.5f; val by2 = e.b.r + 0.5f
+                    tw.cancel(a); tw.cancel(b); a.sx = 1f; a.sy = 1f; b.sx = 1f; b.sy = 1f
                     tw.to(a, Sprite.P_X, bx2, 110f, Easing.outQ); tw.to(a, Sprite.P_Y, by2, 110f, Easing.outQ)
                     tw.to(b, Sprite.P_X, ax, 110f, Easing.outQ); tw.to(b, Sprite.P_Y, ay, 110f, Easing.outQ)
                     tw.to(a, Sprite.P_X, ax, 120f, Easing.outQ, 120f); tw.to(a, Sprite.P_Y, ay, 120f, Easing.outQ, 120f)
