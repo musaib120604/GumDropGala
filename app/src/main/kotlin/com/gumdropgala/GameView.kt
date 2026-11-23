@@ -145,10 +145,12 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
                 ui.pointerDown = false
                 if (boardTouch) play?.onUp()
                 else {
-                    val dh = downHit
-                    if (e.actionMasked == MotionEvent.ACTION_UP && dh != null && dh.onTap != null && !mapDragged && ui.hitAt(x, y) === dh) {
+                    // Hit regions are rebuilt every frame, so compare the regions under the finger now, not stale objects.
+                    val up = ui.hitAt(x, y)
+                    val tap = up?.onTap
+                    if (e.actionMasked == MotionEvent.ACTION_UP && downHit != null && tap != null && !mapDragged && up === ui.hitAt(ui.downX, ui.downY)) {
                         env.sfx(Sfx.BTN); env.hap(Hap.TAP)
-                        dh.onTap.invoke()
+                        tap.invoke()
                     }
                 }
                 boardTouch = false; downHit = null
