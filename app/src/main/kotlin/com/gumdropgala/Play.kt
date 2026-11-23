@@ -251,6 +251,7 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
             tw.to(s, Sprite.P_SC, 1.5f, 120f, Easing.outQ); tw.to(s, Sprite.P_SC, 1f, 300f, Easing.outElastic, 120f)
             fx.emit(px(cr.c + 0.5f), py(cr.r + 0.5f), 0xFFFFFFFF.toInt(), 12, 130f, 1, cell * 0.12f, 0f, 520f)
             fx.addLine(L_RING_, cr.c + 0.5f, cr.r + 0.5f, 380f, radius = 1.6f)
+            fx.burst(cr.c + 0.5f, cr.r + 0.5f, 2.6f, 420f)
             env.sfx(Sfx.MAKE); env.hap(Hap.MEDIUM)
         }
         for (cv in e.converted) sp(cv.id)?.let { s ->
@@ -264,14 +265,16 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
             when (ef) {
                 is Effect.Row -> { fx.addLine(Effects.L_ROW, 4f, ef.r + 0.5f, 420f, delayMs = d); env.sfx(Sfx.SPECIAL); env.hap(Hap.HEAVY); shakeAmt = max(shakeAmt, 3f) }
                 is Effect.Col -> { fx.addLine(Effects.L_COL, ef.c + 0.5f, 4f, 420f, delayMs = d); env.sfx(Sfx.SPECIAL); env.hap(Hap.HEAVY); shakeAmt = max(shakeAmt, 3f) }
-                is Effect.Blast -> { fx.addLine(L_RING_, ef.c + 0.5f, ef.r + 0.5f, 420f, delayMs = d, radius = ef.radius + 1.1f); env.sfx(Sfx.BOOM); env.hap(Hap.HEAVY); shakeAmt = max(shakeAmt, 5f) }
+                is Effect.Blast -> { fx.burst(ef.c + 0.5f, ef.r + 0.5f, ef.radius * 2f + 2.2f, delayMs = d); fx.addLine(L_RING_, ef.c + 0.5f, ef.r + 0.5f, 420f, delayMs = d, radius = ef.radius + 1.1f); env.sfx(Sfx.BOOM); env.hap(Hap.HEAVY); shakeAmt = max(shakeAmt, 5f) }
                 is Effect.BigCross -> {
+                    fx.burst(ef.c + 0.5f, ef.r + 0.5f, 5f, delayMs = d)
                     fx.addLine(Effects.L_ROW, 4f, ef.r + 0.5f, 450f, delayMs = d); fx.addLine(Effects.L_COL, ef.c + 0.5f, 4f, 450f, delayMs = d)
                     fx.addLine(L_RING_, ef.c + 0.5f, ef.r + 0.5f, 450f, delayMs = d, radius = 2.4f); env.sfx(Sfx.BOOM); env.hap(Hap.BOMB); shakeAmt = max(shakeAmt, 7f)
                 }
                 is Effect.Bomb -> bolts(ef.r, ef.c, ef.targets, d)
                 is Effect.BombConvert -> bolts(ef.r, ef.c, ef.targets, d)
                 is Effect.BombAll -> {
+                    fx.burst(ef.c + 0.5f, ef.r + 0.5f, 11f, 620f, d)
                     fx.addLine(Effects.L_FLASH, 0f, 0f, 520f, delayMs = d); fx.addLine(L_RING_, ef.c + 0.5f, ef.r + 0.5f, 560f, delayMs = d, radius = 9f)
                     env.sfx(Sfx.BOOM); env.hap(Hap.BOMB); shakeAmt = max(shakeAmt, 9f)
                 }

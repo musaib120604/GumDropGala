@@ -1,5 +1,8 @@
 package com.gumdropgala
 
+import android.content.res.AssetManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
@@ -297,7 +300,36 @@ class Ui {
     fun hill1(world: Int): Int = if (world == 9) hsl(280f, 0.4f, 0.52f) else hsl((hues[world % 10] + 120f) % 360f, 0.58f, 0.76f)
     fun hill2(world: Int): Int = if (world == 9) hsl(265f, 0.38f, 0.42f) else hsl((hues[world % 10] + 150f) % 360f, 0.52f, 0.68f)
 
+    var assets: AssetManager? = null
+    private val bgCache = HashMap<Int, Bitmap>()
+    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+    private fun bg(world: Int): Bitmap? {
+        bgCache[world]?.let { return it }
+        val am = assets ?: return null
+        return try {
+            if (bgCache.size >= 3) { bgCache.values.forEach { it.recycle() }; bgCache.clear() }
+            val o = BitmapFactory.Options(); o.inPreferredConfig = Bitmap.Config.RGB_565
+            val b = am.open("art/bg_${world.coerceIn(0, 9)}.webp").use { BitmapFactory.decodeStream(it, null, o) }
+            if (b != null) bgCache[world] = b
+            b
+        } catch (e: Exception) { null }
+    }
+
     fun backdrop(world: Int) {
+        val img = bg(world)
+        if (img != null) {
+            val s = max(w / img.width, h / img.height)
+            val dw = img.width * s; val dh = img.height * s
+            rect.set((w - dw) / 2f, (h - dh), (w + dw) / 2f, h) // anchor to the bottom so the hills stay visible
+            c.drawBitmap(img, null, rect, bgPaint)
+            for (i in 0 until 2) cloud(((timeMs * (0.005f + i * 0.003f) + i * 190f) % (w + 240f)) - 120f, h * (0.1f + i * 0.14f), 0.7f + i * 0.25f)
+            return
+        }
+        fallbackBackdrop(world)
+    }
+
+    private fun fallbackBackdrop(world: Int) {
         p.style = Paint.Style.FILL
         p.shader = LinearGradient(0f, 0f, 0f, h * 0.75f, skyTop(world), skyBottom(world), Shader.TileMode.CLAMP)
         c.drawRect(0f, 0f, w, h, p); p.shader = null

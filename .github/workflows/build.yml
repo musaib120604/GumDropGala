@@ -14,7 +14,11 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  GRADLE_VERSION: "8.10.2"
+
 jobs:
+  # 1. Engine unit tests + random-play simulation (pure Kotlin, no Android needed)
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -27,12 +31,13 @@ jobs:
       - name: Engine tests and simulations
         run: gradle :engine:test --no-daemon --stacktrace
 
+  # 2. Native Android build
   android:
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
-      contents: write
+      contents: write # only used to attach APKs to a GitHub Release on tags
     env:
       VERSION_CODE: ${{ github.run_number }}
       KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -54,10 +59,7 @@ jobs:
         with: { gradle-version: "8.10.2" }
 
       - name: Install SDK platform and build tools
-        run: |
-          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$SDKM" --licenses > /dev/null || true
-          "$SDKM" "platforms;android-35" "build-tools;35.0.0"
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true; "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace

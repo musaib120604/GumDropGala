@@ -19,7 +19,7 @@ enum class Sfx { SELECT, SWAP, INVALID, MATCH, POP, FALL, MAKE, SPECIAL, BOOM, C
  * background thread mixes them, plus a looping procedural music track, into one AudioTrack.
  * Music and effects have independent volumes.
  */
-class Audio {
+class SynthAudio {
     @Volatile var sfxVolume = 0.8f
     @Volatile var musicVolume = 0.55f
     @Volatile private var running = false

@@ -5,16 +5,16 @@ import android.content.Context
 /** Everything the screens share. One instance for the life of the activity. */
 class Env(val ctx: Context) {
     val ui = Ui()
-    val art = CandyArt()
+    val art = CandyArt().also { it.assets = ctx.assets }
     val fx = Effects()
     val tw = Tweens()
     val timers = Timers()
-    val audio = Audio()
+    val audio = Audio(ctx)
     val hap = Haptics(ctx)
     val store = SaveStore(ctx)
     var save: SaveData = store.load()
 
-    init { applySettings() }
+    init { applySettings(); ui.assets = ctx.assets; fx.loadTextures(ctx.assets) }
 
     fun persist() { try { store.save(save) } catch (e: Exception) { /* best effort */ } }
 

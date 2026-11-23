@@ -1,6 +1,8 @@
 package com.gumdropgala
 
+import android.content.res.AssetManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Matrix
@@ -32,6 +34,7 @@ val CANDY_COLORS = arrayOf(
  * Every colour has its own silhouette and surface detail, so candies are tellable apart without relying on colour.
  */
 class CandyArt {
+    var assets: AssetManager? = null
     private val cache = HashMap<Int, Bitmap>()
     private var size = 0
     private var symbols = false
@@ -45,14 +48,26 @@ class CandyArt {
 
     fun get(type: Int, special: Int): Bitmap {
         val key = if (special == Special.BOMB) 999 else type * 8 + special
-        return cache.getOrPut(key) { render(type, special, size, symbols) }
+        return cache.getOrPut(key) { (if (symbols) null else fromAsset(type, special, size)) ?: render(type, special, size, symbols) }
     }
 
     /** Standalone small render for HUD icons and avatars. */
     private val small = HashMap<Int, Bitmap>()
     fun icon(type: Int, special: Int, px: Int): Bitmap {
         val key = (if (special == Special.BOMB) 999 else type * 8 + special) * 1000 + px
-        return small.getOrPut(key) { render(type, special, px, false) }
+        return small.getOrPut(key) { fromAsset(type, special, px) ?: render(type, special, px, false) }
+    }
+
+    /** Pre-rendered high-resolution sprite from assets/art, scaled down smoothly. Null if missing. */
+    private fun fromAsset(type: Int, special: Int, px: Int): Bitmap? {
+        val am = assets ?: return null
+        return try {
+            val name = if (special == Special.BOMB) "candy_bomb.png" else "candy_${type}_${special}.png"
+            var b = am.open("art/$name").use { BitmapFactory.decodeStream(it) } ?: return null
+            while (b.width / 2 >= px) { val h = Bitmap.createScaledBitmap(b, b.width / 2, b.height / 2, true); if (h !== b) b.recycle(); b = h }
+            if (b.width != px) { val h = Bitmap.createScaledBitmap(b, px, px, true); if (h !== b) b.recycle(); b = h }
+            b
+        } catch (e: Exception) { null }
     }
 
     companion object {

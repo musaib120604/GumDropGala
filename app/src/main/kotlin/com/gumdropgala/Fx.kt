@@ -1,6 +1,10 @@
 package com.gumdropgala
 
+import android.content.res.AssetManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.RectF
 import android.graphics.Paint
 import android.graphics.Path
 import kotlin.math.PI
@@ -149,6 +153,34 @@ class Timers {
 /* ------------------------------------------------------------------ particles & effects (all in board units) */
 
 class Effects {
+    // textures from assets/fx (all optional: the code-drawn shapes are used when missing)
+    private var glowBmp: Bitmap? = null
+    private var sparkleBmp: Bitmap? = null
+    private var ringBmp: Bitmap? = null
+    private var burstBmp: Bitmap? = null
+    private val tr = RectF()
+    private val src = android.graphics.Rect()
+    private val tp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+
+    fun loadTextures(am: AssetManager) {
+        fun ld(n: String): Bitmap? = try { am.open("art/$n").use { BitmapFactory.decodeStream(it) } } catch (e: Exception) { null }
+        glowBmp = ld("fx_glow.png"); sparkleBmp = ld("fx_sparkle.png"); ringBmp = ld("fx_ring.png"); burstBmp = ld("fx_burst.png")
+    }
+
+    // sprite-sheet bursts (8 frames), positions in board cell units
+    private val bn = 16
+    private val bOn = BooleanArray(bn); private val bX = FloatArray(bn); private val bY = FloatArray(bn)
+    private val bS = FloatArray(bn); private val bT = FloatArray(bn); private val bD = FloatArray(bn)
+    private var bIdx = 0
+    private var bActive = 0
+
+    /** Plays the burst animation centred on a board cell. [size] is in cells; [delayMs] postpones the start. */
+    fun burst(cx: Float, cy: Float, size: Float, durMs: Float = 460f, delayMs: Float = 0f) {
+        val i = bIdx; bIdx = (bIdx + 1) % bn
+        if (!bOn[i]) bActive++
+        bOn[i] = true; bX[i] = cx; bY[i] = cy; bS[i] = size; bT[i] = -delayMs; bD[i] = durMs
+    }
+
     private val rnd = Random(42)
     private val star = Path()
 
@@ -215,10 +247,10 @@ class Effects {
         la[f] = rnd.nextFloat() - 0.5f; lb[f] = rnd.nextFloat() - 0.5f; lr[f] = radius
     }
 
-    val busy: Boolean get() = activeCount > 0 || ftActive > 0 || lActive > 0
+    val busy: Boolean get() = activeCount > 0 || ftActive > 0 || lActive > 0 || bActive > 0
 
     fun clear() {
-        java.util.Arrays.fill(pon, false); java.util.Arrays.fill(ftOn, false); java.util.Arrays.fill(lOn, false)
+        java.util.Arrays.fill(pon, false); java.util.Arrays.fill(ftOn, false); java.util.Arrays.fill(lOn, false); java.util.Arrays.fill(bOn, false); bActive = 0
         activeCount = 0; ftActive = 0; lActive = 0
     }
 
@@ -236,6 +268,7 @@ class Effects {
         }
         for (i in 0 until fn) if (ftOn[i]) { ftL[i] += dtMs; if (ftL[i] >= ftM[i]) { ftOn[i] = false; ftActive-- } }
         for (i in 0 until ln) if (lOn[i]) { lt[i] += dtMs; if (lt[i] >= ld[i]) { lOn[i] = false; lActive-- } }
+        for (i in 0 until bn) if (bOn[i]) { bT[i] += dtMs; if (bT[i] >= bD[i]) { bOn[i] = false; bActive-- } }
     }
 
     /** Draws beams, particles and floating text. [cell] is the board cell size, [bx]/[by]/[bsize] the board rectangle. */
@@ -262,7 +295,13 @@ class Effects {
                 L_RING -> {
                     p.style = Paint.Style.STROKE; p.strokeWidth = cell * 0.35f * a + 1f
                     p.color = argb(a, 255, 225, 150)
-                    c.drawCircle(bx + lx[i] * cell, by + ly[i] * cell, e * cell * lr[i], p)
+                    val rb = ringBmp
+                    if (rb != null) {
+                        val rr = e * cell * lr[i]
+                        tp.alpha = (a * 255f).toInt().coerceIn(0, 255)
+                        tr.set(bx + lx[i] * cell - rr, by + ly[i] * cell - rr, bx + lx[i] * cell + rr, by + ly[i] * cell + rr)
+                        c.drawBitmap(rb, null, tr, tp); tp.alpha = 255
+                    } else c.drawCircle(bx + lx[i] * cell, by + ly[i] * cell, e * cell * lr[i], p)
                     p.style = Paint.Style.FILL
                 }
                 L_BOLT -> {
@@ -280,6 +319,18 @@ class Effects {
                 L_FLASH -> { p.color = argb(a * 0.75f, 255, 255, 255); c.drawRect(bx - 6f, by - 6f, bx + bsize + 6f, by + bsize + 6f, p) }
             }
         }
+        val bb = burstBmp; val gb = glowBmp
+        if (bb != null) for (i in 0 until bn) {
+            if (!bOn[i] || bT[i] < 0f) continue
+            val k = bT[i] / bD[i]
+            val frame = min(7, (k * 8f).toInt())
+            val half = bS[i] * cell * 0.5f
+            val cx = bx + bX[i] * cell; val cy = by + bY[i] * cell
+            if (gb != null) { tp.alpha = ((1f - k) * 200f).toInt().coerceIn(0, 255); tr.set(cx - half * 1.1f, cy - half * 1.1f, cx + half * 1.1f, cy + half * 1.1f); c.drawBitmap(gb, null, tr, tp) }
+            tp.alpha = 255
+            src.set(frame * 128, 0, frame * 128 + 128, 128); tr.set(cx - half, cy - half, cx + half, cy + half)
+            c.drawBitmap(bb, src, tr, tp)
+        }
         for (i in 0 until pn) {
             if (!pon[i]) continue
             val k = pl[i] / pm[i]
@@ -287,7 +338,15 @@ class Effects {
             p.color = (pc[i] and 0x00FFFFFF) or ((alpha * 255f).toInt().coerceIn(0, 255) shl 24)
             when (psh[i]) {
                 0 -> c.drawCircle(px[i], py[i], ps[i] * (1f - k * 0.5f), p)
-                1 -> sparkle(c, p, px[i], py[i], ps[i] * 1.5f * (1f - k * 0.4f), pr[i])
+                1 -> {
+                    val sb = sparkleBmp
+                    if (sb != null) {
+                        val rr = ps[i] * 2.6f * (1f - k * 0.4f)
+                        tp.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
+                        c.save(); c.translate(px[i], py[i]); c.rotate(pr[i] * 57.29578f * 0.3f)
+                        tr.set(-rr, -rr, rr, rr); c.drawBitmap(sb, null, tr, tp); c.restore(); tp.alpha = 255
+                    } else sparkle(c, p, px[i], py[i], ps[i] * 1.5f * (1f - k * 0.4f), pr[i])
+                }
                 else -> {
                     c.save(); c.translate(px[i], py[i]); c.rotate(pr[i] * 57.29578f)
                     val sy = abs(cos(pr[i] * 1.7f)) * 0.8f + 0.2f

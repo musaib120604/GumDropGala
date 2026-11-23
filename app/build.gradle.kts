@@ -30,6 +30,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    // keep audio/art stored uncompressed so SoundPool/MediaPlayer can open them straight from the APK
+    androidResources { noCompress += listOf("ogg", "webp", "png") }
     lint { abortOnError = false; checkReleaseBuilds = false }
     sourceSets["main"].java.srcDir("src/main/kotlin")
 }
