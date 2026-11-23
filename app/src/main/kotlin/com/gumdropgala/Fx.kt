@@ -120,6 +120,16 @@ class Tweens {
         }
     }
 
+    /** Stops every running tween on [o] so a new motion doesn't fight an old one. */
+    fun cancel(o: Tweenable) {
+        var i = active.size - 1
+        while (i >= 0) {
+            val tw = active[i]
+            if (tw.target === o) { active.removeAt(i); tw.target = null; tw.done = null; pool.add(tw) }
+            i--
+        }
+    }
+
     fun clear() {
         for (tw in active) { tw.target = null; tw.done = null; pool.add(tw) }
         active.clear()

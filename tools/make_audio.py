@@ -93,6 +93,13 @@ sfx_('shuffle', b)
 b = np.zeros(int(.5 * SR)); place(b, lp(sweep(2400, 180, .35, 1, 'saw'), 3500) * env(int(.35 * SR), dec=7), 0); place(b, hp(noise(.3), 1200) * env(int(.3 * SR), dec=12) * .6, 0)
 place(b, bell(hz(100), .2, .4), 0); sfx_('bolt', b)
 
+# cartoon boing when a candy is touched, and a soft squish when it is slid
+t = t_(.34); f = 330 + 140 * np.sin(2 * np.pi * 9 * t) * np.exp(-6 * t) + 120 * np.exp(-9 * t)
+b = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-8 * t) + .35 * np.sin(4 * np.pi * np.cumsum(f) / SR) * np.exp(-12 * t)
+sfx_('jiggle', b * np.minimum(1, t / .004))
+t = t_(.16); f = 220 * (1.9 ** np.minimum(1, t / .09)); b = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.sin(np.pi * np.minimum(1, t / .16)) ** .7
+sfx_('squish', lp(b, 1800) * .9)
+
 for k, v in sfx.items(): write('sfx_' + k, v, False, 4)
 
 # ------------------------------------------------------------------ music

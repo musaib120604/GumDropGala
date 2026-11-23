@@ -64,7 +64,7 @@ class Audio(private val ctx: Context) {
         Sfx.MATCH -> "match_${v.coerceIn(0, 8)}"; Sfx.POP -> "pop"; Sfx.FALL -> "fall"; Sfx.MAKE -> "make"
         Sfx.SPECIAL -> "special"; Sfx.BOOM -> "boom"; Sfx.CASCADE -> "cascade_${v.coerceIn(2, 8)}"
         Sfx.STAR -> "star_${v.coerceIn(0, 2)}"; Sfx.WIN -> "win"; Sfx.LOSE -> "lose"; Sfx.BTN -> "btn"
-        Sfx.COIN -> "coin"; Sfx.SHUFFLE -> "shuffle"; Sfx.BOLT -> "bolt"
+        Sfx.COIN -> "coin"; Sfx.SHUFFLE -> "shuffle"; Sfx.BOLT -> "bolt"; Sfx.JIGGLE -> "jiggle"; Sfx.SQUISH -> "squish"
     }
 
     fun play(s: Sfx, variant: Int = 0, gain: Float = 1f) {

@@ -161,8 +161,8 @@ class GameView(ctx: Context, private val onQuit: () -> Unit) : View(ctx), Choreo
 
     /* --------------------------------------------------------- navigation */
     private fun go(s: Screen) {
-        anim.v[1] = 1f; env.tw.to(anim, 1, 0f, 380f, Easing.lin)
         if (s != Screen.PLAY) { play?.destroy(); play = null; env.audio.startMusic(worldOf(env.save.unlocked)) }
+        anim.v[1] = 1f; env.tw.to(anim, 1, 0f, 380f, Easing.lin) // after destroy(), which clears all tweens
         if (s == Screen.MAP) centerMapOn(env.save.unlocked)
         screen = s
     }

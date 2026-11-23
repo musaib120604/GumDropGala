@@ -12,7 +12,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.tanh
 
-enum class Sfx { SELECT, SWAP, INVALID, MATCH, POP, FALL, MAKE, SPECIAL, BOOM, CASCADE, STAR, WIN, LOSE, BTN, COIN, SHUFFLE, BOLT }
+enum class Sfx { SELECT, SWAP, INVALID, MATCH, POP, FALL, MAKE, SPECIAL, BOOM, CASCADE, STAR, WIN, LOSE, BTN, COIN, SHUFFLE, BOLT, JIGGLE, SQUISH }
 
 /**
  * All sound is synthesised in code (no audio assets): effects are rendered once into short buffers and a
@@ -216,6 +216,8 @@ class SynthAudio {
         run { val b = buf(0.08f); tone(b, 0f, 880f, 0.045f, 2, 0.05f, 1200f); put(Sfx.BTN, 0, b) }
         run { val b = buf(0.3f); tone(b, 0f, 988f, 0.08f, 2, 0.07f); tone(b, 0.07f, 1319f, 0.18f, 2, 0.07f); put(Sfx.COIN, 0, b) }
         run { val b = buf(0.5f); noise(b, 0f, 0.45f, 500f, 3500f, 0.12f, 2); tone(b, 0f, 200f, 0.4f, 0, 0.08f, 600f); put(Sfx.SHUFFLE, 0, b) }
+        run { val b = buf(0.3f); tone(b, 0f, 330f, 0.25f, 0, 0.12f, 520f); tone(b, 0.1f, 440f, 0.15f, 0, 0.06f, 300f); put(Sfx.JIGGLE, 0, b) }
+        run { val b = buf(0.15f); tone(b, 0f, 220f, 0.12f, 0, 0.1f, 420f); put(Sfx.SQUISH, 0, b) }
         run { val b = buf(0.25f); tone(b, 0f, 1400f, 0.18f, 3, 0.06f, 300f); noise(b, 0f, 0.15f, 6000f, 1500f, 0.07f, 1); put(Sfx.BOLT, 0, b) }
         synchronized(lock) { bank.putAll(tmp) }
         bankReady = true

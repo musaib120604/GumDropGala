@@ -79,15 +79,56 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
         if (hammerArmed) return
         val sel = selected
         if (sel != null && isAdjacent(sel, p)) { selected = null; trySwap(sel, p); downCell = null; return }
-        if (sel == null || sel != p) { selected = p; env.sfx(Sfx.SELECT); env.hap(Hap.TICK) } else selected = null
+        if (sel == null || sel != p) { selected = p; env.sfx(Sfx.JIGGLE); env.hap(Hap.TICK); spriteAt(p)?.let { jiggle(it) } } else selected = null
+        dragSprite = spriteAt(p)
+    }
+
+    private var dragSprite: Sprite? = null
+
+    private fun spriteAt(p: Pos): Sprite? { val id = game.grid[p.r][p.c]?.id ?: return null; return sprites[id] }
+
+    /** Puffy wobble: squashes, then springs back with a few elastic wiggles. */
+    private fun jiggle(s: Sprite) {
+        if (env.reduceMotion) return
+        val tw = env.tw
+        tw.cancel(s)
+        s.sx = 1.22f; s.sy = 0.82f; s.rot = 0.16f
+        tw.to(s, Sprite.P_SX, 1f, 620f, Easing.outElastic)
+        tw.to(s, Sprite.P_SY, 1f, 620f, Easing.outElastic)
+        tw.to(s, Sprite.P_ROT, 0f, 560f, Easing.outElastic)
+    }
+
+    /** Lets go of a candy that was being dragged: springs back to its cell. */
+    private fun releaseDrag(p: Pos?) {
+        val s = dragSprite ?: return
+        dragSprite = null
+        val tw = env.tw
+        tw.cancel(s)
+        val tx = (p?.c ?: s.x.toInt()) + 0.5f; val ty = (p?.r ?: s.y.toInt()) + 0.5f
+        tw.to(s, Sprite.P_X, tx, 380f, Easing.outElastic); tw.to(s, Sprite.P_Y, ty, 380f, Easing.outElastic)
+        tw.to(s, Sprite.P_SX, 1f, 420f, Easing.outElastic); tw.to(s, Sprite.P_SY, 1f, 420f, Easing.outElastic)
     }
 
     fun onMove(x: Float, y: Float) {
         val from = downCell ?: return
         if (dragged || !canAct || hammerArmed) return
         val dx = x - downX; val dy = y - downY
-        if (abs(dx) < cell * 0.42f && abs(dy) < cell * 0.42f) return
+        if (abs(dx) < cell * 0.42f && abs(dy) < cell * 0.42f) {
+            // follow the finger a little, stretching along the drag like jelly
+            val ds = dragSprite
+            if (ds != null && !env.reduceMotion) {
+                env.tw.cancel(ds)
+                val horiz = abs(dx) >= abs(dy)
+                val off = ((if (horiz) dx else dy) / cell).coerceIn(-0.4f, 0.4f)
+                val stretch = 1f + abs(off) * 0.7f; val squash = 1f - abs(off) * 0.4f
+                ds.x = from.c + 0.5f + (if (horiz) off else 0f); ds.y = from.r + 0.5f + (if (horiz) 0f else off)
+                ds.sx = if (horiz) stretch else squash; ds.sy = if (horiz) squash else stretch
+            }
+            return
+        }
         dragged = true
+        dragSprite?.let { env.tw.cancel(it); it.sx = 1f; it.sy = 1f }
+        dragSprite = null
         val to = if (abs(dx) > abs(dy)) Pos(from.r, from.c + if (dx > 0) 1 else -1) else Pos(from.r + if (dy > 0) 1 else -1, from.c)
         downCell = null; selected = null
         if (inBounds(to.r, to.c)) trySwap(from, to)
@@ -95,6 +136,7 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
 
     fun onUp() {
         val p = downCell
+        if (p != null && !hammerArmed) releaseDrag(p)
         if (p != null && hammerArmed && canAct) {
             hammerArmed = false
             env.sfx(Sfx.SPECIAL); env.hap(Hap.HEAVY)
@@ -160,9 +202,23 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
             is Swapped -> {
                 val a = sp(e.idA); val b = sp(e.idB)
                 env.sfx(Sfx.SWAP); env.hap(Hap.SOFT)
-                if (a != null) { tw.to(a, Sprite.P_X, e.b.c + 0.5f, 140f, Easing.inOut); tw.to(a, Sprite.P_Y, e.b.r + 0.5f, 140f, Easing.inOut) }
-                if (b != null) { tw.to(b, Sprite.P_X, e.a.c + 0.5f, 140f, Easing.inOut); tw.to(b, Sprite.P_Y, e.a.r + 0.5f, 140f, Easing.inOut) }
-                wake(150f)
+                env.sfx(Sfx.SQUISH, 0, 0.7f)
+                val horiz = e.a.r == e.b.r
+                for ((spr, to) in listOf(a to e.b, b to e.a)) {
+                    if (spr == null) continue
+                    tw.cancel(spr)
+                    tw.to(spr, Sprite.P_X, to.c + 0.5f, 150f, Easing.inOut); tw.to(spr, Sprite.P_Y, to.r + 0.5f, 150f, Easing.inOut)
+                    if (!env.reduceMotion) {
+                        // stretch while travelling, then a jelly squash-and-settle on arrival
+                        tw.to(spr, Sprite.P_SX, if (horiz) 1.3f else 0.8f, 70f, Easing.outQ)
+                        tw.to(spr, Sprite.P_SY, if (horiz) 0.8f else 1.3f, 70f, Easing.outQ)
+                        tw.to(spr, Sprite.P_SX, if (horiz) 0.8f else 1.2f, 70f, Easing.inOut, 70f)
+                        tw.to(spr, Sprite.P_SY, if (horiz) 1.2f else 0.8f, 70f, Easing.inOut, 70f)
+                        tw.to(spr, Sprite.P_SX, 1f, 260f, Easing.outElastic, 150f)
+                        tw.to(spr, Sprite.P_SY, 1f, 260f, Easing.outElastic, 150f)
+                    }
+                }
+                wake(170f)
             }
             is Matched -> {
                 val biggest = e.groups.maxOfOrNull { it.size } ?: 3
