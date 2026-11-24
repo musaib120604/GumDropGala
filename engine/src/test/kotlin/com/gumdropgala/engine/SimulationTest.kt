@@ -50,7 +50,7 @@ class SimulationTest {
         assertTrue("ran $turns turns / $events events", turns > 5000)
     }
 
-    /** A greedy bot should beat early levels almost always and later levels most of the time. */
+    /** A greedy bot should beat early levels almost always and still win a fair share of the late, harder levels. */
     @Test fun difficultyRampsGently() {
         fun play(n: Int, k: Int): Boolean {
             val g = Game(levelConfig(n), seed = n * 101 + k * 7 + 3)
@@ -76,7 +76,9 @@ class SimulationTest {
         val late = rate(61, 100)
         println("bot win rate: levels 1-10 = ${(early * 100).toInt()}%, levels 61-100 = ${(late * 100).toInt()}%")
         assertTrue("early levels too hard: $early", early >= 0.9)
-        assertTrue("late levels impossible: $late", late >= 0.5)
+        // levels were deliberately made harder: this bot (objective-aware but with no planning) now wins ~44% late;
+        // below 35% would mean the late game is out of reach for ordinary play
+        assertTrue("late levels impossible: $late", late >= 0.35)
         assertTrue("late levels not harder than early", late <= early)
     }
 }
