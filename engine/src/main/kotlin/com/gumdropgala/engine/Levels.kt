@@ -29,7 +29,7 @@ data class LevelConfig(
 private fun jellyPattern(n: Int, rng: Rng): List<JellyCell> {
     val pats = listOf("rows", "ring", "checker", "center", "columns", "corners")
     val p = pats[rng.nextInt(pats.size)]
-    val layers = if (n > 60) 2 else 1
+    val layers = if (n > 40) 2 else 1
     val out = ArrayList<JellyCell>()
     for (r in 0 until H) for (c in 0 until W) {
         val on = when (p) {
@@ -52,32 +52,32 @@ private fun jellyPattern(n: Int, rng: Rng): List<JellyCell> {
 fun levelConfig(n: Int): LevelConfig {
     val rng = Rng(n * 104729 + 7)
     val world = (n - 1) / LEVELS_PER_WORLD
-    val colors = if (n <= 10) 4 else if (n <= 45) 5 else (if (n % 3 == 0) 6 else 5)
+    val colors = when { n <= 3 -> 4; n <= 25 -> 5; else -> (if (n % 3 == 0) 6 else 5) }
     val kinds = listOf("score", "collect", "jelly", "special", "mixed")
     val kind = when (n) { 1 -> "score"; 2 -> "collect"; 3 -> "score"; else -> kinds[(n + world) % 5] }
-    var moves = max(16, 30 - n / 8)
+    var moves = max(15, 27 - n / 8)
     val objectives = ArrayList<Objective>()
     var jelly: List<JellyCell> = emptyList()
-    val baseScore = jsRound((moves * (140 + n * 3.4)) / 100.0) * 100
+    val baseScore = jsRound((moves * (155 + n * 3.6)) / 100.0) * 100
     val collectType = rng.nextInt(colors)
-    val collectTarget = min(42, 12 + (n * 0.3).toInt())
+    val collectTarget = min(48, 14 + (n * 0.36).toInt())
     when (kind) {
         "score" -> objectives.add(Objective.Score(baseScore))
         "collect" -> objectives.add(Objective.Collect(collectType, collectTarget))
-        "jelly" -> { jelly = jellyPattern(n, rng); moves += 4; objectives.add(Objective.Jelly) }
-        "special" -> objectives.add(Objective.MakeSpecial(min(9, 3 + n / 14)))
+        "jelly" -> { jelly = jellyPattern(n, rng); moves += 3; objectives.add(Objective.Jelly) }
+        "special" -> objectives.add(Objective.MakeSpecial(min(11, 4 + n / 12)))
         else -> {
             if (n % 2 == 1) {
                 objectives.add(Objective.Collect(collectType, jsRound(collectTarget * 0.8)))
                 objectives.add(Objective.Score(jsRound(baseScore * 0.7 / 100.0) * 100))
             } else {
-                jelly = jellyPattern(n, rng); moves += 3
+                jelly = jellyPattern(n, rng); moves += 2
                 objectives.add(Objective.Jelly)
                 objectives.add(Objective.Collect(collectType, jsRound(collectTarget * 0.7)))
             }
         }
     }
-    val s1 = if (kind == "score") baseScore else jsRound((moves * (110 + n * 2.6)) / 100.0) * 100
+    val s1 = if (kind == "score") baseScore else jsRound((moves * (130 + n * 3.4)) / 100.0) * 100
     val stars = intArrayOf(s1, jsRound(s1 * 1.45 / 100.0) * 100, jsRound(s1 * 2.0 / 100.0) * 100)
     return LevelConfig(n, world, (n - 1) % LEVELS_PER_WORLD, colors, moves, objectives, jelly, stars)
 }
