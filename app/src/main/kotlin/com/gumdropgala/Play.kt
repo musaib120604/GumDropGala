@@ -269,9 +269,12 @@ class Play(private val env: Env, val levelNo: Int, private val onEnded: (Ended) 
                 wake(150f + maxD * 55f)
             }
             is CascadeStep -> {
-                if (e.n >= 3) {
-                    env.sfx(Sfx.CASCADE, min(8, e.n))
-                    env.fx.floatText(env.ui.w / 2f, by + bsize * 0.42f, when { e.n >= 5 -> "Divine!"; e.n == 4 -> "Delicious!"; e.n == 3 -> "Sweet!"; else -> "" }, 34f, Pal.LEMON, 1100f)
+                if (e.n >= 2) {
+                    // voice clip variants: 0 Tasty, 1 Sweet, 2 Delicious, 3 Divine
+                    val (word, voice) = when { e.n >= 5 -> "Divine!" to 3; e.n == 4 -> "Delicious!" to 2; e.n == 3 -> "Sweet!" to 1; else -> "Tasty!" to 0 }
+                    if (e.n >= 3) env.sfx(Sfx.CASCADE, min(8, e.n))
+                    env.sfx(Sfx.VOICE, voice)
+                    env.fx.floatText(env.ui.w / 2f, by + bsize * 0.42f, word, 34f, Pal.LEMON, 1100f)
                 }
             }
             is SugarCrush -> {

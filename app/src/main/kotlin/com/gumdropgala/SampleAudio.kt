@@ -65,6 +65,7 @@ class Audio(private val ctx: Context) {
         Sfx.SPECIAL -> "special"; Sfx.BOOM -> "boom"; Sfx.CASCADE -> "cascade_${v.coerceIn(2, 8)}"
         Sfx.STAR -> "star_${v.coerceIn(0, 2)}"; Sfx.WIN -> "win"; Sfx.LOSE -> "lose"; Sfx.BTN -> "btn"
         Sfx.COIN -> "coin"; Sfx.SHUFFLE -> "shuffle"; Sfx.BOLT -> "bolt"; Sfx.JIGGLE -> "jiggle"; Sfx.SQUISH -> "squish"
+        Sfx.VOICE -> when (v) { 0 -> "voice_tasty"; 1 -> "voice_sweet"; 2 -> "voice_delicious"; else -> "voice_divine" }
     }
 
     fun play(s: Sfx, variant: Int = 0, gain: Float = 1f) {

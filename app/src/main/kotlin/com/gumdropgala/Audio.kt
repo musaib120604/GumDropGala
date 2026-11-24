@@ -12,7 +12,7 @@ import kotlin.math.pow
 import kotlin.math.sin
 import kotlin.math.tanh
 
-enum class Sfx { SELECT, SWAP, INVALID, MATCH, POP, FALL, MAKE, SPECIAL, BOOM, CASCADE, STAR, WIN, LOSE, BTN, COIN, SHUFFLE, BOLT, JIGGLE, SQUISH }
+enum class Sfx { SELECT, SWAP, INVALID, MATCH, POP, FALL, MAKE, SPECIAL, BOOM, CASCADE, STAR, WIN, LOSE, BTN, COIN, SHUFFLE, BOLT, JIGGLE, SQUISH, VOICE }
 
 /**
  * All sound is synthesised in code (no audio assets): effects are rendered once into short buffers and a
